@@ -1,0 +1,33 @@
+name: CI Pipeline
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff mypy
+      - run: ruff check .
+      - run: mypy .
+
+  test-agent:
+    needs: lint
+    uses: ./.github/workflows/test-agent.yml
+
+  test-execution:
+    needs: test-agent
+    uses: ./.github/workflows/test-execution.yml
+
+  test-db:
+    needs: test-execution
+    uses: ./.github/workflows/test-db.yml
+
+  test-erc:
+    needs: test-db
+    uses: ./.github/workflows/test-erc.yml

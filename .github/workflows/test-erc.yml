@@ -1,0 +1,30 @@
+name: Test Signing and On-chain
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-erc:
+    runs-on: ubuntu-latest
+
+    env:
+      ETH_RPC_URL: ${{ secrets.ETH_TESTNET_RPC_URL }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TradeIntent and EIP-712 tests
+        run: npm test -- --testPathPattern=erc
+
+      - name: Validate on-chain event snapshots
+        run: npm run test:snapshots

@@ -1,0 +1,62 @@
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: quasar-postgres
+    environment:
+      POSTGRES_USER: quasar
+      POSTGRES_PASSWORD: quasarpass
+      POSTGRES_DB: quasardb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+
+  agent:
+    image: quasar-agent:latest
+    container_name: quasar-agent
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://quasar:quasarpass@postgres:5432/quasardb
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY}
+      KRAKEN_API_SECRET: ${KRAKEN_API_SECRET}
+    depends_on:
+      - postgres
+    networks:
+      - quasar-net
+
+  dashboard:
+    image: quasar-dashboard:latest
+    container_name: quasar-dashboard
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - agent
+      - postgres
+    networks:
+      - quasar-net
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: quasar-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@quasar.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    networks:
+      - quasar-net
+
+networks:
+  quasar-net:
+    driver: bridge
+
+volumes:
+  postgres_data:    
