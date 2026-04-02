@@ -1,3 +1,4 @@
 plan.md
-/logs
+/logs/*.log
+/logs/*.txt
 roadmap.md

@@ -3,54 +3,78 @@ services:
   postgres:
     image: postgres:15
     container_name: quasar-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: quasar
-      POSTGRES_PASSWORD: quasarpass
-      POSTGRES_DB: quasardb
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - quasar-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   agent:
     image: quasar-agent:latest
     container_name: quasar-agent
+    restart: unless-stopped
     build:
       context: ./agent
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgres://quasar:quasarpass@postgres:5432/quasardb
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       KRAKEN_API_KEY: ${KRAKEN_API_KEY}
       KRAKEN_API_SECRET: ${KRAKEN_API_SECRET}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - quasar-net
 
-  dashboard:
-    image: quasar-dashboard:latest
-    container_name: quasar-dashboard
+  backend:
+    image: quasar-backend:latest
+    container_name: quasar-backend
+    restart: unless-stopped
     build:
-      context: ./dashboard
+      context: ./backend
       dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: ${BACKEND_PORT:-4000}
     ports:
-      - "3000:3000"
+      - "${BACKEND_PORT:-4000}:4000"
     depends_on:
-      - agent
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - quasar-net
 
   pgadmin:
     image: dpage/pgadmin4
     container_name: quasar-pgadmin
+    restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@quasar.local
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     ports:
       - "8080:80"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    networks:
+      - quasar-net
+  redis:
+    image: redis:7-alpine
+    container_name: quasar-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     networks:
       - quasar-net
 
@@ -59,4 +83,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:    
+  postgres_data:
