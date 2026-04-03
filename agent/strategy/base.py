@@ -1,10 +1,10 @@
+import json
+import subprocess
 from abc import ABC, abstractmethod
 from contracts.router import submit_trade_intent
 from contracts.validation import post_checkpoint
-from config import KRAKEN_CLI_PATH, KRAKEN_SANDBOX, KRAKEN_API_KEY, KRAKEN_API_SECRET
+from config import KRAKEN_CLI_PATH, KRAKEN_PAPER_MODE
 from logger import get_logger
-import subprocess
-import json
 
 logger = get_logger(__name__)
 
@@ -26,35 +26,46 @@ class BaseStrategy(ABC):
     def analyze(self, symbol: str) -> dict:
         ...
 
+    def _ensure_paper_init(self):
+        try:
+            cmd = [KRAKEN_CLI_PATH, "paper", "status", "-o", "json"]
+            subprocess.check_output(cmd, timeout=10, stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            try:
+                init_cmd = [KRAKEN_CLI_PATH, "paper", "init", "--balance", "10000", "-o", "json"]
+                subprocess.check_output(init_cmd, timeout=10)
+                logger.info("[paper] paper account initialised with $10,000")
+            except Exception as e:
+                logger.error(f"[paper] init failed: {e}")
+
     def open_position(self, decision: dict, price: float) -> dict:
-        pair      = decision["symbol"]
-        action    = decision["action"]
-        risk_pct  = decision["risk_pct"]
-        leverage  = decision["leverage"]
-        rr_ratio  = decision["rr_ratio"]
+        pair     = decision["symbol"]
+        action   = decision["action"]
+        risk_pct = decision["risk_pct"]
+        leverage = decision["leverage"]
 
         from contracts.vault import get_available_capital
         available = get_available_capital()
         amount    = round((available * risk_pct / 100) * leverage, 2)
+        volume    = str(round(amount / price, 6))
 
         result = submit_trade_intent(pair, action, amount)
         if not result["approved"]:
             logger.warning(f"[{pair}] TradeIntent rejected: {result.get('reason')}")
             return {"executed": False, "reason": result.get("reason")}
 
-        kraken_action = "buy" if action == "LONG" else "sell"
-        volume        = str(round(amount / price, 6))
+        kraken_side = "buy" if action == "LONG" else "sell"
 
-        cmd = [KRAKEN_CLI_PATH, "--json"]
-        if KRAKEN_SANDBOX:
-            cmd.append("--sandbox")
-        cmd += ["--api-key", KRAKEN_API_KEY, "--api-secret", KRAKEN_API_SECRET]
-        cmd += ["order", "add", "--pair", pair, "--type", kraken_action, "--ordertype", "market", "--volume", volume]
+        if KRAKEN_PAPER_MODE:
+            self._ensure_paper_init()
+            cmd = [KRAKEN_CLI_PATH, "paper", kraken_side, pair, volume, "-o", "json"]
+        else:
+            cmd = [KRAKEN_CLI_PATH, "order", kraken_side, pair, volume, "--type", "market", "-o", "json"]
 
         try:
-            out    = subprocess.check_output(cmd, timeout=15)
-            order  = json.loads(out)
-            logger.info(f"[{pair}] order placed: {order}")
+            out   = subprocess.check_output(cmd, timeout=15)
+            order = json.loads(out)
+            logger.info(f"[{pair}] {'[PAPER] ' if KRAKEN_PAPER_MODE else ''}order placed: {order}")
 
             post_checkpoint(
                 action=action,
@@ -68,31 +79,54 @@ class BaseStrategy(ABC):
 
             return {"executed": True, "order": order, "intent_hash": result["intent_hash"]}
 
+        except subprocess.CalledProcessError as e:
+            err = e.output.decode() if e.output else str(e)
+            logger.error(f"[{pair}] Kraken order failed: {err}")
+            return {"executed": False, "reason": err}
         except Exception as e:
             logger.error(f"[{pair}] Kraken order failed: {e}")
             return {"executed": False, "reason": str(e)}
 
     def close_position(self, symbol: str, volume: str) -> dict:
-        cmd = [KRAKEN_CLI_PATH, "--json"]
-        if KRAKEN_SANDBOX:
-            cmd.append("--sandbox")
-        cmd += ["--api-key", KRAKEN_API_KEY, "--api-secret", KRAKEN_API_SECRET]
-        cmd += ["order", "add", "--pair", symbol, "--type", "sell", "--ordertype", "market", "--volume", volume]
+        if KRAKEN_PAPER_MODE:
+            cmd = [KRAKEN_CLI_PATH, "paper", "sell", symbol, volume, "-o", "json"]
+        else:
+            cmd = [KRAKEN_CLI_PATH, "order", "sell", symbol, volume, "--type", "market", "-o", "json"]
 
         try:
             out   = subprocess.check_output(cmd, timeout=15)
             order = json.loads(out)
-            logger.info(f"[{symbol}] position closed: {order}")
+            logger.info(f"[{symbol}] {'[PAPER] ' if KRAKEN_PAPER_MODE else ''}position closed: {order}")
             return {"closed": True, "order": order}
+        except subprocess.CalledProcessError as e:
+            err = e.output.decode() if e.output else str(e)
+            logger.error(f"[{symbol}] close failed: {err}")
+            return {"closed": False, "reason": err}
         except Exception as e:
             logger.error(f"[{symbol}] close failed: {e}")
             return {"closed": False, "reason": str(e)}
 
     def get_open_orders(self) -> dict:
-        cmd = [KRAKEN_CLI_PATH, "--json", "--api-key", KRAKEN_API_KEY, "--api-secret", KRAKEN_API_SECRET, "order", "list"]
+        if KRAKEN_PAPER_MODE:
+            cmd = [KRAKEN_CLI_PATH, "paper", "orders", "-o", "json"]
+        else:
+            cmd = [KRAKEN_CLI_PATH, "open-orders", "-o", "json"]
+
         try:
             out = subprocess.check_output(cmd, timeout=15)
             return json.loads(out)
         except Exception as e:
             logger.error(f"get_open_orders failed: {e}")
+            return {}
+
+    def get_paper_status(self) -> dict:
+        if not KRAKEN_PAPER_MODE:
+            return {}
+        try:
+            out = subprocess.check_output(
+                [KRAKEN_CLI_PATH, "paper", "status", "-o", "json"], timeout=10
+            )
+            return json.loads(out)
+        except Exception as e:
+            logger.error(f"get_paper_status failed: {e}")
             return {}
