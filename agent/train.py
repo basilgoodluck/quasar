@@ -10,14 +10,14 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-MODEL_DIR    = os.getenv("MODEL_DIR", "models")
-INTERVAL     = os.getenv("TRAIN_INTERVAL", "15m")
-WINDOW       = int(os.getenv("TRAIN_WINDOW", "96"))
-EPOCHS       = int(os.getenv("TRAIN_EPOCHS", "50"))
-BATCH_SIZE   = int(os.getenv("TRAIN_BATCH_SIZE", "64"))
-LR           = float(os.getenv("TRAIN_LR", "0.001"))
-VAL_SPLIT    = float(os.getenv("TRAIN_VAL_SPLIT", "0.15"))
-DEVICE       = "cuda" if torch.cuda.is_available() else "cpu"
+MODEL_DIR  = os.getenv("MODEL_DIR", "models")
+INTERVAL   = os.getenv("TRAIN_INTERVAL", "15m")
+WINDOW     = int(os.getenv("TRAIN_WINDOW", "96"))
+EPOCHS     = int(os.getenv("TRAIN_EPOCHS", "50"))
+BATCH_SIZE = int(os.getenv("TRAIN_BATCH_SIZE", "64"))
+LR         = float(os.getenv("TRAIN_LR", "0.001"))
+VAL_SPLIT  = float(os.getenv("TRAIN_VAL_SPLIT", "0.15"))
+DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def get_active_symbols():
@@ -25,6 +25,23 @@ def get_active_symbols():
         with conn.cursor() as cur:
             cur.execute("SELECT symbol FROM symbols WHERE active = TRUE")
             return [r[0] for r in cur.fetchall()]
+
+
+def _count_real_labels():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM trade_outcomes WHERE status IN ('WIN','LOSS','NEUTRAL')")
+            return cur.fetchone()[0]
+
+
+def _log_retrain_event(val_loss: float, real_label_count: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO retrain_log (val_loss, real_label_count, trained_at)
+                VALUES (%s, %s, EXTRACT(EPOCH FROM NOW())::BIGINT)
+            """, (val_loss, real_label_count))
+            conn.commit()
 
 
 def load_data(symbols):
@@ -50,14 +67,17 @@ def train():
     symbols = get_active_symbols()
     logger.info(f"Symbols: {symbols}")
 
+    real_count = _count_real_labels()
+    logger.info(f"Real outcome labels available: {real_count}")
+
     X, y = load_data(symbols)
     logger.info(f"Total sequences: {len(X)} | Feature dim: {X.shape[2]}")
 
     X_t = torch.tensor(X)
     y_t = torch.tensor(y)
 
-    dataset  = TensorDataset(X_t, y_t)
-    val_size = int(len(dataset) * VAL_SPLIT)
+    dataset    = TensorDataset(X_t, y_t)
+    val_size   = int(len(dataset) * VAL_SPLIT)
     train_size = len(dataset) - val_size
     train_ds, val_ds = random_split(dataset, [train_size, val_size])
 
@@ -65,10 +85,10 @@ def train():
     val_dl   = DataLoader(val_ds,   batch_size=BATCH_SIZE)
 
     input_size = X.shape[2]
-    model = get_model(input_size, DEVICE)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-    criterion = nn.MSELoss()
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
+    model      = get_model(input_size, DEVICE)
+    optimizer  = torch.optim.Adam(model.parameters(), lr=LR)
+    criterion  = nn.MSELoss()
+    scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
 
     best_val_loss = float("inf")
 
@@ -103,7 +123,8 @@ def train():
             save_model(model, os.path.join(MODEL_DIR, "regime_lstm.pt"))
             logger.info(f"Model saved (val={val_loss:.6f})")
 
-    logger.info("Training complete")
+    _log_retrain_event(best_val_loss, real_count)
+    logger.info(f"Training complete — real labels used: {real_count}")
 
 
 if __name__ == "__main__":

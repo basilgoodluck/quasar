@@ -3,6 +3,7 @@ from agent.base import BaseStrategy
 from agent.regime import detect_regime
 from agent.openai import get_trade_params
 from agent.features import _fetch_ohlcv
+from agent.reputation import get_reputation_score
 from config import TRAIN_INTERVAL, STRUCTURE_LOOKBACK, ARC_FISHER_PERIOD
 from logger import get_logger
 
@@ -14,11 +15,11 @@ def _price_structure(symbol: str, direction: str) -> dict:
     if df is None or len(df) < STRUCTURE_LOOKBACK:
         return {"valid": False, "note": "insufficient data"}
 
-    recent   = df.tail(STRUCTURE_LOOKBACK)
-    current  = float(df["close"].iloc[-1])
-    high     = float(recent["high"].max())
-    low      = float(recent["low"].min())
-    rng      = high - low
+    recent  = df.tail(STRUCTURE_LOOKBACK)
+    current = float(df["close"].iloc[-1])
+    high    = float(recent["high"].max())
+    low     = float(recent["low"].min())
+    rng     = high - low
 
     if rng == 0:
         return {"valid": False, "note": "zero range"}
@@ -58,19 +59,16 @@ def _fisher_confirmation(symbol: str, direction: str) -> dict:
     if df is None or len(df) < ARC_FISHER_PERIOD:
         return {"confirmed": True, "note": "skipped"}
 
-    period   = ARC_FISHER_PERIOD
-    high     = df["high"].rolling(period).max()
-    low      = df["low"].rolling(period).min()
-    rng      = high - low
-    value    = 2 * ((df["close"] - low) / (rng + 1e-9)) - 1
-    value    = value.clip(-0.999, 0.999)
-    fisher   = 0.5 * np.log((1 + value) / (1 - value))
-    last     = float(fisher.iloc[-1])
+    period = ARC_FISHER_PERIOD
+    high   = df["high"].rolling(period).max()
+    low    = df["low"].rolling(period).min()
+    rng    = high - low
+    value  = 2 * ((df["close"] - low) / (rng + 1e-9)) - 1
+    value  = value.clip(-0.999, 0.999)
+    fisher = 0.5 * np.log((1 + value) / (1 - value))
+    last   = float(fisher.iloc[-1])
 
-    if direction == "long":
-        confirmed = last < -1.5
-    else:
-        confirmed = last > 1.5
+    confirmed = last < -1.5 if direction == "long" else last > 1.5
 
     return {
         "confirmed": confirmed,
@@ -82,19 +80,29 @@ def _fisher_confirmation(symbol: str, direction: str) -> dict:
 class ARCStrategy(BaseStrategy):
 
     def analyze(self, symbol: str) -> dict:
-        regime = detect_regime(symbol)
+        reputation = get_reputation_score()
+        regime     = detect_regime(symbol, reputation=reputation)
 
         if not regime["ready"]:
-            return self.skip(symbol, "regime not ready")
+            return self.skip(
+                symbol, "regime not ready",
+                confidence=0.0, post_on_chain=False,
+            )
 
         direction = regime["direction"]
 
         if direction == "neutral":
-            return self.skip(symbol, "regime neutral")
+            return self.skip(
+                symbol, "regime neutral — confidence inside dead zone",
+                confidence=regime["confidence"], post_on_chain=True,
+            )
 
         structure = _price_structure(symbol, direction)
         if not structure["valid"]:
-            return self.skip(symbol, f"structure invalid: {structure['note']}")
+            return self.skip(
+                symbol, f"structure invalid: {structure['note']}",
+                confidence=regime["confidence"], post_on_chain=True,
+            )
 
         ma     = _ma_confirmation(symbol, direction)
         fisher = _fisher_confirmation(symbol, direction)
@@ -105,10 +113,13 @@ class ARCStrategy(BaseStrategy):
         if not fisher["confirmed"]:
             logger.info(f"[{symbol}] Fisher does not confirm {direction}: {fisher['note']}")
 
-        params = get_trade_params(regime)
+        params = get_trade_params(regime, reputation=reputation)
 
         if params["action"] == "SKIP":
-            return self.skip(symbol, params["explanation"])
+            return self.skip(
+                symbol, params["explanation"],
+                confidence=regime["confidence"], post_on_chain=True,
+            )
 
         return {
             "symbol":      symbol,
@@ -116,8 +127,12 @@ class ARCStrategy(BaseStrategy):
             "leverage":    params["leverage"],
             "risk_pct":    params["risk_pct"],
             "rr_ratio":    params["rr_ratio"],
-            "explanation": f"{params['explanation']} | {structure['note']} | {ma['note']} | {fisher['note']}",
+            "explanation": (
+                f"{params['explanation']} | {structure['note']} | "
+                f"{ma['note']} | {fisher['note']} | reputation={reputation:.4f}"
+            ),
             "regime":      regime,
             "structure":   structure,
+            "reputation":  reputation,
             "ready":       True,
         }

@@ -14,15 +14,20 @@ LIMITS = {
 
 _SYSTEM = """You are a trade sizing optimizer for a crypto futures trading agent called ARC.
 
-You receive a full market regime snapshot and hard limits.
-Based on the regime values decide the exact leverage, risk % and RR ratio within those limits.
-Also write a 2-3 sentence plain English explanation of the trade: what the market is doing, why this is a valid setup, and what the key risk is.
+You receive a market regime snapshot, a reputation score, and hard limits.
+The reputation score is between 0 and 1. It reflects the agent's verified on-chain win rate and decision consistency.
 
-- High confidence + low volatility → push leverage and risk toward upper bound
-- Low confidence + high volatility → pull leverage and risk toward lower bound
+Sizing rules:
+- reputation >= 0.7 → you may use up to 100% of the leverage and risk limits
+- reputation 0.4–0.7 → use 50–80% of the limits
+- reputation < 0.4 → stay close to the minimum limits regardless of confidence
+- High confidence + low volatility → push toward upper bound of your allowed range
+- Low confidence + high volatility → stay at lower bound
 - Strong trend → RR toward upper bound
 - Weak trend → RR toward lower bound
 - neutral direction → action must be SKIP
+
+Also write a 2-3 sentence plain English explanation referencing the market data and reputation level.
 
 Respond ONLY with valid JSON, no markdown, no extra text:
 {"action": "LONG"|"SHORT"|"SKIP", "leverage": float, "risk_pct": float, "rr_ratio": float, "explanation": "string"}"""
@@ -37,7 +42,7 @@ def _clamp(value: float, key: str) -> float:
     return round(clamped, 4)
 
 
-def get_trade_params(regime: dict) -> dict:
+def get_trade_params(regime: dict, reputation: float = 0.0) -> dict:
     if regime.get("direction", "neutral") == "neutral":
         return {
             "action":      "SKIP",
@@ -52,7 +57,8 @@ def get_trade_params(regime: dict) -> dict:
         f"volatility_regime={regime['volatility_regime']} "
         f"activity_score={regime['activity_score']} "
         f"trend_strength={regime['trend_strength']} "
-        f"direction={regime['direction']}\n"
+        f"direction={regime['direction']} "
+        f"reputation={reputation}\n"
         f"limits: leverage {MIN_LEVERAGE}–{MAX_LEVERAGE}x "
         f"risk {MIN_RISK_PCT}–{MAX_RISK_PCT}% "
         f"rr {MIN_RR}–{MAX_RR}"
@@ -82,7 +88,10 @@ def get_trade_params(regime: dict) -> dict:
             "explanation": str(data.get("explanation", "")),
         }
 
-        logger.info(f"[openai] {result['action']} leverage={result['leverage']}x risk={result['risk_pct']}% rr={result['rr_ratio']}")
+        logger.info(
+            f"[openai] {result['action']} leverage={result['leverage']}x "
+            f"risk={result['risk_pct']}% rr={result['rr_ratio']} reputation={reputation}"
+        )
         return result
 
     except Exception as e:

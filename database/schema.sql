@@ -30,13 +30,14 @@ CREATE TABLE symbols (
     symbol TEXT UNIQUE NOT NULL,
     active BOOLEAN DEFAULT TRUE,
     intervals TEXT[] NOT NULL DEFAULT '{15m,1h}',
+    asset_class TEXT NOT NULL DEFAULT 'crypto',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO symbols (symbol, active, intervals) VALUES
-    ('BTCUSDT', TRUE, '{15m,1h}'),
-    ('ETHUSDT', TRUE, '{15m,1h}'),
-    ('SOLUSDT', TRUE, '{15m,1h}');
+INSERT INTO symbols (symbol, active, intervals, asset_class) VALUES
+    ('BTCUSDT', TRUE, '{15m,1h}', 'crypto'),
+    ('ETHUSDT', TRUE, '{15m,1h}', 'crypto'),
+    ('SOLUSDT', TRUE, '{15m,1h}', 'crypto');
 
 CREATE TABLE agents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -169,10 +170,45 @@ CREATE TABLE cvd_history (
     UNIQUE (symbol, interval, open_time)
 );
 
-CREATE INDEX idx_market_data_symbol_interval ON market_data (symbol, interval, open_time DESC);
-CREATE INDEX idx_funding_rates_symbol ON funding_rates (symbol, funding_time DESC);
-CREATE INDEX idx_oi_history_symbol ON oi_history (symbol, period, timestamp DESC);
-CREATE INDEX idx_liquidations_symbol ON liquidations (symbol, trade_time DESC);
-CREATE INDEX idx_cvd_history_symbol ON cvd_history (symbol, interval, open_time DESC);
-CREATE INDEX idx_snapshots_agent_symbol ON snapshots (agent_id, symbol, created_at DESC);
-CREATE INDEX idx_signals_agent_symbol ON signals (agent_id, symbol, created_at DESC);
+CREATE TABLE trade_outcomes (
+    id                   SERIAL PRIMARY KEY,
+    intent_hash          VARCHAR(66) UNIQUE NOT NULL,
+    pair                 VARCHAR(20) NOT NULL,
+    action               VARCHAR(10) NOT NULL,
+    entry_price          NUMERIC(20, 8) NOT NULL,
+    exit_price           NUMERIC(20, 8),
+    amount_usd           NUMERIC(20, 4) NOT NULL,
+    confidence_at_entry  NUMERIC(8, 6) NOT NULL,
+    reputation_at_entry  NUMERIC(8, 6) NOT NULL DEFAULT 0,
+    checkpoint_hash      VARCHAR(66),
+    outcome_tx_hash      VARCHAR(66),
+    status               VARCHAR(10) NOT NULL DEFAULT 'PENDING',
+    created_at           BIGINT NOT NULL,
+    resolved_at          BIGINT
+);
+
+CREATE TABLE reputation_history (
+    id          SERIAL PRIMARY KEY,
+    agent_id    INTEGER NOT NULL,
+    score       NUMERIC(8, 6) NOT NULL,
+    recorded_at BIGINT NOT NULL
+);
+
+CREATE TABLE retrain_log (
+    id               SERIAL PRIMARY KEY,
+    val_loss         NUMERIC(12, 8) NOT NULL,
+    real_label_count INTEGER NOT NULL,
+    trained_at       BIGINT NOT NULL
+);
+
+CREATE INDEX idx_market_data_symbol_interval   ON market_data (symbol, interval, open_time DESC);
+CREATE INDEX idx_funding_rates_symbol          ON funding_rates (symbol, funding_time DESC);
+CREATE INDEX idx_oi_history_symbol             ON oi_history (symbol, period, timestamp DESC);
+CREATE INDEX idx_liquidations_symbol           ON liquidations (symbol, trade_time DESC);
+CREATE INDEX idx_cvd_history_symbol            ON cvd_history (symbol, interval, open_time DESC);
+CREATE INDEX idx_snapshots_agent_symbol        ON snapshots (agent_id, symbol, created_at DESC);
+CREATE INDEX idx_signals_agent_symbol          ON signals (agent_id, symbol, created_at DESC);
+CREATE INDEX idx_trade_outcomes_pair           ON trade_outcomes (pair);
+CREATE INDEX idx_trade_outcomes_status         ON trade_outcomes (status);
+CREATE INDEX idx_trade_outcomes_created        ON trade_outcomes (created_at);
+CREATE INDEX idx_reputation_agent              ON reputation_history (agent_id);

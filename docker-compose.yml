@@ -53,6 +53,23 @@ services:
     networks:
       - quasar-net
 
+  outcome_tracker:
+    image: quasar-outcome-tracker:latest
+    container_name: quasar-outcome-tracker
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    command: python agent/outcome_tracker.py
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      agent:
+        condition: service_started
+    networks:
+      - quasar-net
+
   trainer:
     image: quasar-trainer:latest
     container_name: quasar-trainer
