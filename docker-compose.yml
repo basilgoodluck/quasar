@@ -12,6 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     networks:
       - quasar-net
     healthcheck:
@@ -20,17 +21,47 @@ services:
       timeout: 5s
       retries: 5
 
+  collector:
+    image: quasar-collector:latest
+    container_name: quasar-collector
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    command: python agent/collect.py
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - quasar-net
+
   agent:
     image: quasar-agent:latest
     container_name: quasar-agent
     restart: unless-stopped
     build:
-      context: ./agent
-      dockerfile: Dockerfile
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      KRAKEN_API_KEY: ${KRAKEN_API_KEY}
-      KRAKEN_API_SECRET: ${KRAKEN_API_SECRET}
+      context: .
+      dockerfile: agent/Dockerfile
+    command: python main.py
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      collector:
+        condition: service_started
+    networks:
+      - quasar-net
+
+  trainer:
+    image: quasar-trainer:latest
+    container_name: quasar-trainer
+    restart: "no"
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    command: python agent/train.py
+    env_file: .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,11 +73,9 @@ services:
     container_name: quasar-backend
     restart: unless-stopped
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      PORT: ${BACKEND_PORT:-4000}
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
     ports:
       - "${BACKEND_PORT:-4000}:4000"
     depends_on:
@@ -69,6 +98,7 @@ services:
         condition: service_healthy
     networks:
       - quasar-net
+
   redis:
     image: redis:7-alpine
     container_name: quasar-redis

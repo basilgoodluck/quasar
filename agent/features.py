@@ -20,7 +20,6 @@ def _fetch_ohlcv(symbol, interval, limit):
         "open": float, "high": float, "low": float,
         "close": float, "volume": float, "taker_buy_volume": float
     })
-
  
 def _fetch_cvd(symbol, interval, limit):
     with get_connection() as conn:

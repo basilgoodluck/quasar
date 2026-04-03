@@ -1,2 +1,9 @@
 web3
 eth_account
+python-dotenv
+openai
+torch
+numpy
+pandas
+aiohttp
+psycopg2-binary

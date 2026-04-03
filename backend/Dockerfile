@@ -1,10 +1,10 @@
-FROM node:20-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY package*.json .
-RUN npm install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["node", "index.js"]
+CMD ["python", "main.py"]
