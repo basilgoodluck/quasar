@@ -21,7 +21,7 @@ jobs:
       - name: Build and push agent image
         uses: docker/build-push-action@v5
         with:
-          context: ./agent
+          context: .
           file: ./agent/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-agent:latest
@@ -29,7 +29,7 @@ jobs:
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: .
           file: ./backend/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-backend:latest
@@ -37,7 +37,7 @@ jobs:
       - name: Build and push collector image
         uses: docker/build-push-action@v5
         with:
-          context: ./collector
+          context: .
           file: ./collector/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-collector:latest
@@ -45,7 +45,7 @@ jobs:
       - name: Build and push trainer image
         uses: docker/build-push-action@v5
         with:
-          context: ./trainer
+          context: .
           file: ./trainer/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-trainer:latest
@@ -53,7 +53,7 @@ jobs:
       - name: Build and push outcome_tracker image
         uses: docker/build-push-action@v5
         with:
-          context: ./outcome_tracker
+          context: .
           file: ./outcome_tracker/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-outcome-tracker:latest
