@@ -32,10 +32,17 @@ jobs:
           push: true
           tags: quasar/dashboard:${{ github.sha }}
 
-      - name: Deploy to production
-        run: |
-          ssh ${{ secrets.DEPLOY_HOST }} "
-            docker pull quasar/agent:${{ github.sha }} &&
-            docker pull quasar/dashboard:${{ github.sha }} &&
-            docker compose up -d --no-deps agent dashboard
-          "
+      - name: Deploy to production VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          script: |
+            set -e
+            mkdir -p /opt/projects/quasar
+            cd /opt/projects/quasar
+            git fetch origin
+            git reset --hard origin/main
+            docker compose pull
+            docker compose up -d --build --no-deps agent dashboard
