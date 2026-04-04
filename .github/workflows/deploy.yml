@@ -68,6 +68,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
+          command_timeout: 40m
           script: |
             set -e
             cd /opt/projects/quasar
