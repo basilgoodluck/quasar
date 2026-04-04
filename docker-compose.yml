@@ -22,11 +22,11 @@ services:
       retries: 5
 
   collector:
-    image: quasar-collector:latest
+    image: noblebasil/quasar-collector:latest
     container_name: quasar-collector
     restart: unless-stopped
     build:
-      context: .                     # root context, scripts copied from agent/
+      context: .
       dockerfile: collector/Dockerfile
     command: python agent/collect.py
     env_file: .env
@@ -37,11 +37,11 @@ services:
       - quasar-net
 
   trainer:
-    image: quasar-trainer:latest
+    image: noblebasil/quasar-trainer:latest
     container_name: quasar-trainer
     restart: "no"
     build:
-      context: .                     # root context
+      context: .
       dockerfile: trainer/Dockerfile
     command: python agent/train.py
     env_file: .env
@@ -52,11 +52,11 @@ services:
       - quasar-net
 
   outcome_tracker:
-    image: quasar-outcome-tracker:latest
+    image: noblebasil/quasar-outcome-tracker:latest
     container_name: quasar-outcome-tracker
     restart: unless-stopped
     build:
-      context: .                     # root context
+      context: .
       dockerfile: outcome_tracker/Dockerfile
     command: python agent/outcome_tracker.py
     env_file: .env
@@ -67,11 +67,11 @@ services:
       - quasar-net
 
   agent:
-    image: quasar-agent:latest
+    image: noblebasil/quasar-agent:latest
     container_name: quasar-agent
     restart: unless-stopped
     build:
-      context: .                     # root context
+      context: .
       dockerfile: agent/Dockerfile
     command: python main.py
     env_file: .env
@@ -82,11 +82,11 @@ services:
       - quasar-net
 
   backend:
-    image: quasar-backend:latest
+    image: noblebasil/quasar-backend:latest
     container_name: quasar-backend
     restart: unless-stopped
     build:
-      context: .                     # root context
+      context: .
       dockerfile: backend/Dockerfile
     env_file: .env
     ports:

@@ -69,5 +69,10 @@ jobs:
             cd /opt/projects/quasar
             git fetch origin
             git reset --hard origin/main
+            echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
             docker compose pull
             docker compose up -d
+          envs: DOCKER_USERNAME,DOCKER_PASSWORD
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
