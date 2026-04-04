@@ -24,7 +24,7 @@ jobs:
           context: .
           file: agent/Dockerfile
           push: true
-          tags: quasar/agent:${{ github.sha }},quasar/agent:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/quasar:${{ github.sha }},${{ secrets.DOCKER_USERNAME }}/quasar:latest
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
