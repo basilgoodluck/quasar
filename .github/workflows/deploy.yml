@@ -75,7 +75,7 @@ jobs:
             git fetch origin
             git reset --hard origin/main
             echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-            docker compose pull
+            docker compose pull --parallel
             docker compose up -d
           envs: DOCKER_USERNAME,DOCKER_PASSWORD
         env:
