@@ -28,7 +28,6 @@ services:
     build:
       context: .
       dockerfile: collector/Dockerfile
-    command: python agent/collect.py
     env_file: .env
     depends_on:
       postgres:
@@ -43,7 +42,6 @@ services:
     build:
       context: .
       dockerfile: trainer/Dockerfile
-    command: python agent/train.py
     env_file: .env
     depends_on:
       postgres:
@@ -58,7 +56,6 @@ services:
     build:
       context: .
       dockerfile: outcome_tracker/Dockerfile
-    command: python agent/outcome_tracker.py
     env_file: .env
     depends_on:
       postgres:
@@ -73,7 +70,6 @@ services:
     build:
       context: .
       dockerfile: agent/Dockerfile
-    command: python main.py
     env_file: .env
     depends_on:
       postgres:
