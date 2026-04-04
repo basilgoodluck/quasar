@@ -74,7 +74,7 @@ def test_full_flow_approved_trade(mock_feat_conn, mock_rep_conn, sample_regime, 
          patch("agent.strategy.arc._fisher_confirmation", return_value={"confirmed": True, "note": "fisher=-1.6", "fisher": -1.6}), \
          patch("agent.strategy.arc.get_trade_params",     return_value={"action": "LONG", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "explanation": "Strong momentum"}), \
          patch("agent.strategy.base.submit_trade_intent", return_value={"approved": True, "intent_hash": "0xdeadbeef", "tx_hash": "0xabc"}), \
-         patch("agent.strategy.base.get_available_capital", return_value=500.0), \
+         patch("contracts.vault.get_available_capital",   return_value=500.0), \
          patch("agent.strategy.base.post_checkpoint",     return_value={"checkpoint_hash": "0xcafe", "tx_hash": "0xdef"}), \
          patch("agent.strategy.base._write_pending_outcome"), \
          patch("subprocess.check_output",                 return_value=json.dumps(mock_order).encode()):
@@ -100,7 +100,7 @@ def test_rejected_trade_intent_does_not_execute(mock_feat_conn, mock_rep_conn, s
     mock_rep_conn.return_value  = _mock_db_conn()
 
     with patch("agent.strategy.base.submit_trade_intent", return_value={"approved": False, "reason": "Exceeds maxPositionSize"}), \
-         patch("agent.strategy.base.get_available_capital", return_value=500.0):
+         patch("contracts.vault.get_available_capital",   return_value=500.0):
 
         from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
