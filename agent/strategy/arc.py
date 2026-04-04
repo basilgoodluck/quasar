@@ -1,5 +1,5 @@
 import numpy as np
-from agent.base import BaseStrategy
+from agent.strategy.base import BaseStrategy
 from agent.regime import detect_regime
 from agent.openai import get_trade_params
 from agent.features import _fetch_ohlcv
