@@ -48,11 +48,11 @@ def test_neutral_regime_produces_skip(mock_feat_conn, mock_rep_conn, sample_regi
 
     neutral_regime = {**sample_regime, "direction": "neutral", "confidence": 0.5}
 
-    with patch("agent.arc.detect_regime", return_value=neutral_regime), \
-         patch("agent.arc.get_reputation_score", return_value=0.0), \
+    with patch("agent.strategy.arc.detect_regime", return_value=neutral_regime), \
+         patch("agent.strategy.arc.get_reputation_score", return_value=0.0), \
          patch("contracts.validation.post_skip_checkpoint", return_value={"tx_hash": "0xabc"}):
 
-        from agent.arc import ARCStrategy
+        from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
         result   = strategy.analyze("BTCUSDT")
 
@@ -68,19 +68,19 @@ def test_full_flow_approved_trade(mock_feat_conn, mock_rep_conn, sample_regime, 
 
     mock_order = {"txid": ["OTXID-TEST123"], "descr": {"order": "buy 0.001 BTCUSDT @ market"}}
 
-    with patch("agent.arc.detect_regime",       return_value=sample_regime), \
-         patch("agent.arc.get_reputation_score", return_value=0.5), \
-         patch("agent.arc._price_structure",     return_value={"valid": True, "note": "ok", "price": 65000.0, "high": 66000.0, "low": 64000.0, "position": 0.5}), \
-         patch("agent.arc._ma_confirmation",     return_value={"confirmed": True, "note": "above MA", "ma": 64000.0}), \
-         patch("agent.arc._fisher_confirmation", return_value={"confirmed": True, "note": "fisher=-1.6", "fisher": -1.6}), \
-         patch("agent.openai.get_trade_params",  return_value={"action": "LONG", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "explanation": "Strong momentum"}), \
-         patch("contracts.router.submit_trade_intent", return_value={"approved": True, "intent_hash": "0xdeadbeef", "tx_hash": "0xabc"}), \
-         patch("contracts.vault.get_available_capital", return_value=500.0), \
-         patch("contracts.validation.post_checkpoint",  return_value={"checkpoint_hash": "0xcafe", "tx_hash": "0xdef"}), \
+    with patch("agent.strategy.arc.detect_regime",          return_value=sample_regime), \
+         patch("agent.strategy.arc.get_reputation_score",   return_value=0.5), \
+         patch("agent.strategy.arc._price_structure",       return_value={"valid": True, "note": "ok", "price": 65000.0, "high": 66000.0, "low": 64000.0, "position": 0.5}), \
+         patch("agent.strategy.arc._ma_confirmation",       return_value={"confirmed": True, "note": "above MA", "ma": 64000.0}), \
+         patch("agent.strategy.arc._fisher_confirmation",   return_value={"confirmed": True, "note": "fisher=-1.6", "fisher": -1.6}), \
+         patch("agent.openai.get_trade_params",             return_value={"action": "LONG", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "explanation": "Strong momentum"}), \
+         patch("contracts.router.submit_trade_intent",      return_value={"approved": True, "intent_hash": "0xdeadbeef", "tx_hash": "0xabc"}), \
+         patch("contracts.vault.get_available_capital",     return_value=500.0), \
+         patch("contracts.validation.post_checkpoint",      return_value={"checkpoint_hash": "0xcafe", "tx_hash": "0xdef"}), \
          patch("agent.base._write_pending_outcome"), \
-         patch("subprocess.check_output",        return_value=json.dumps(mock_order).encode()):
+         patch("subprocess.check_output",                   return_value=json.dumps(mock_order).encode()):
 
-        from agent.arc import ARCStrategy
+        from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
         decision = strategy.analyze("BTCUSDT")
 
@@ -103,7 +103,7 @@ def test_rejected_trade_intent_does_not_execute(mock_feat_conn, mock_rep_conn, s
     with patch("contracts.router.submit_trade_intent", return_value={"approved": False, "reason": "Exceeds maxPositionSize"}), \
          patch("contracts.vault.get_available_capital", return_value=500.0):
 
-        from agent.arc import ARCStrategy
+        from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
         result   = strategy.open_position(sample_decision, price=65000.0, reputation=0.5)
 
@@ -125,7 +125,7 @@ def test_reputation_adjusts_regime_thresholds(mock_feat_conn, mock_rep_conn):
     with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
          patch("agent.regime.load_model") as mock_loader:
 
-        mock_model        = MagicMock()
+        mock_model = MagicMock()
         mock_model.return_value = torch.tensor([0.58])
         mock_loader.return_value = mock_model
 
