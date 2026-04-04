@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY agent/collect.py .
 
-CMD ["python", "collect.py"]
+CMD ["python", "agent/collect.py"]

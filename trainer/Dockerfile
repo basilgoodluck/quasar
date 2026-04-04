@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY agent/train.py .
 
-CMD ["python", "train.py"]
+CMD ["python", "agent/train.py"]
