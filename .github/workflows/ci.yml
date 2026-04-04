@@ -38,6 +38,7 @@ jobs:
           --health-retries 5
 
     env:
+      PYTHONPATH: /home/runner/work/quasar/quasar
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       POSTGRES_USER: quasar
@@ -78,5 +79,3 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
-        env:
-          PYTHONPATH: ${{ github.workspace }}
