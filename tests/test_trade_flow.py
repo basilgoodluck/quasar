@@ -21,16 +21,15 @@ def test_regime_direction_from_confidence(mock_feat_conn, mock_rep_conn):
     mock_rep_conn.return_value  = _mock_db_conn()
 
     import torch
-    from unittest.mock import patch as p
+    import numpy as np
 
-    fake_seq = torch.zeros((1, 96, 15))
+    fake_seq = np.zeros((1, 96, 15), dtype="float32")
 
-    with p("agent.regime.build_live_sequence", return_value=fake_seq.numpy()), \
-         p("agent.regime.load_model") as mock_model_loader:
+    mock_model = MagicMock()
+    mock_model.return_value = torch.tensor([0.75])
 
-        mock_model        = MagicMock()
-        mock_model.return_value = torch.tensor([0.75])
-        mock_model_loader.return_value = mock_model
+    with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
+         patch("agent.regime._get_model", return_value=mock_model):
 
         from agent.regime import detect_regime
         result = detect_regime("BTCUSDT", reputation=0.0)
@@ -68,17 +67,17 @@ def test_full_flow_approved_trade(mock_feat_conn, mock_rep_conn, sample_regime, 
 
     mock_order = {"txid": ["OTXID-TEST123"], "descr": {"order": "buy 0.001 BTCUSDT @ market"}}
 
-    with patch("agent.strategy.arc.detect_regime",          return_value=sample_regime), \
-         patch("agent.strategy.arc.get_reputation_score",   return_value=0.5), \
-         patch("agent.strategy.arc._price_structure",       return_value={"valid": True, "note": "ok", "price": 65000.0, "high": 66000.0, "low": 64000.0, "position": 0.5}), \
-         patch("agent.strategy.arc._ma_confirmation",       return_value={"confirmed": True, "note": "above MA", "ma": 64000.0}), \
-         patch("agent.strategy.arc._fisher_confirmation",   return_value={"confirmed": True, "note": "fisher=-1.6", "fisher": -1.6}), \
-         patch("agent.openai.get_trade_params",             return_value={"action": "LONG", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "explanation": "Strong momentum"}), \
-         patch("contracts.router.submit_trade_intent",      return_value={"approved": True, "intent_hash": "0xdeadbeef", "tx_hash": "0xabc"}), \
-         patch("contracts.vault.get_available_capital",     return_value=500.0), \
-         patch("contracts.validation.post_checkpoint",      return_value={"checkpoint_hash": "0xcafe", "tx_hash": "0xdef"}), \
-         patch("agent.base._write_pending_outcome"), \
-         patch("subprocess.check_output",                   return_value=json.dumps(mock_order).encode()):
+    with patch("agent.strategy.arc.detect_regime",        return_value=sample_regime), \
+         patch("agent.strategy.arc.get_reputation_score", return_value=0.5), \
+         patch("agent.strategy.arc._price_structure",     return_value={"valid": True, "note": "ok", "price": 65000.0, "high": 66000.0, "low": 64000.0, "position": 0.5}), \
+         patch("agent.strategy.arc._ma_confirmation",     return_value={"confirmed": True, "note": "above MA", "ma": 64000.0}), \
+         patch("agent.strategy.arc._fisher_confirmation", return_value={"confirmed": True, "note": "fisher=-1.6", "fisher": -1.6}), \
+         patch("agent.openai.get_trade_params",           return_value={"action": "LONG", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "explanation": "Strong momentum"}), \
+         patch("contracts.router.submit_trade_intent",    return_value={"approved": True, "intent_hash": "0xdeadbeef", "tx_hash": "0xabc"}), \
+         patch("contracts.vault.get_available_capital",   return_value=500.0), \
+         patch("contracts.validation.post_checkpoint",    return_value={"checkpoint_hash": "0xcafe", "tx_hash": "0xdef"}), \
+         patch("agent.strategy.base._write_pending_outcome"), \
+         patch("subprocess.check_output",                 return_value=json.dumps(mock_order).encode()):
 
         from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
@@ -122,17 +121,18 @@ def test_reputation_adjusts_regime_thresholds(mock_feat_conn, mock_rep_conn):
 
     fake_seq = np.zeros((1, 96, 15), dtype="float32")
 
+    mock_model = MagicMock()
+    mock_model.return_value = torch.tensor([0.58])
+
+    from agent.regime import detect_regime
+
     with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
-         patch("agent.regime.load_model") as mock_loader:
+         patch("agent.regime._get_model", return_value=mock_model):
+        result_low_rep = detect_regime("BTCUSDT", reputation=0.0)
 
-        mock_model = MagicMock()
-        mock_model.return_value = torch.tensor([0.58])
-        mock_loader.return_value = mock_model
-
-        from agent.regime import detect_regime
-
-        result_low_rep  = detect_regime("BTCUSDT", reputation=0.0)
+    with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
+         patch("agent.regime._get_model", return_value=mock_model):
         result_high_rep = detect_regime("BTCUSDT", reputation=1.0)
 
-        assert result_low_rep["direction"]  == "neutral"
-        assert result_high_rep["direction"] == "long"
+    assert result_low_rep["direction"]  == "neutral"
+    assert result_high_rep["direction"] == "long"
