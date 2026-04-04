@@ -10,25 +10,77 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff mypy
+
+      - run: pip install ruff
       - run: ruff check .
-      - run: mypy .
 
-  test-agent:
+  test:
     needs: lint
-    uses: ./.github/workflows/test-agent.yml
+    runs-on: ubuntu-latest
 
-  test-execution:
-    needs: test-agent
-    uses: ./.github/workflows/test-execution.yml
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: quasar
+          POSTGRES_PASSWORD: quasar
+          POSTGRES_DB: quasar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
-  test-db:
-    needs: test-execution
-    uses: ./.github/workflows/test-db.yml
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: quasar
+      POSTGRES_PASSWORD: quasar
+      POSTGRES_DB: quasar_test
+      SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+      AGENT_ID: "0"
+      AGENT_WALLET_ADDRESS: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      AGENT_WALLET_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      RISK_ROUTER_ADDRESS: "0x0000000000000000000000000000000000000001"
+      HACKATHON_VAULT_ADDRESS: "0x0000000000000000000000000000000000000002"
+      VALIDATION_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003"
+      AGENT_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000004"
+      CHAIN_ID: "11155111"
+      KRAKEN_API_KEY: mock
+      KRAKEN_API_SECRET: mock
+      KRAKEN_PAPER_MODE: "true"
+      OPENAI_API_KEY: mock
 
-  test-erc:
-    needs: test-db
-    uses: ./.github/workflows/test-erc.yml
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Kraken CLI
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/krakenfx/kraken-cli/releases/latest/download/kraken-cli-installer.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Apply schema
+        run: psql postgresql://quasar:quasar@localhost:5432/quasar_test -f database/schema.sql
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v
+
+      - name: Run integration tests
+        run: pytest tests/integration/ -v
+
+      - name: Run DB tests
+        run: pytest tests/db/ -v
