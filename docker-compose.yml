@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
 
   postgres:
@@ -26,9 +28,39 @@ services:
     container_name: quasar-collector
     restart: unless-stopped
     build:
-      context: .
-      dockerfile: agent/Dockerfile
-    command: python agent/collect.py
+      context: ./collector          # Dockerfile folder
+      dockerfile: Dockerfile
+    command: python collect.py      # script from agent/
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - quasar-net
+
+  trainer:
+    image: quasar-trainer:latest
+    container_name: quasar-trainer
+    restart: "no"
+    build:
+      context: ./trainer
+      dockerfile: Dockerfile
+    command: python train.py        # script from agent/
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - quasar-net
+
+  outcome_tracker:
+    image: quasar-outcome-tracker:latest
+    container_name: quasar-outcome-tracker
+    restart: unless-stopped
+    build:
+      context: ./outcome_tracker
+      dockerfile: Dockerfile
+    command: python outcome_tracker.py  # script from agent/
     env_file: .env
     depends_on:
       postgres:
@@ -41,43 +73,9 @@ services:
     container_name: quasar-agent
     restart: unless-stopped
     build:
-      context: .
-      dockerfile: agent/Dockerfile
+      context: ./agent
+      dockerfile: Dockerfile
     command: python main.py
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      collector:
-        condition: service_started
-    networks:
-      - quasar-net
-
-  outcome_tracker:
-    image: quasar-outcome-tracker:latest
-    container_name: quasar-outcome-tracker
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: agent/Dockerfile
-    command: python agent/outcome_tracker.py
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      agent:
-        condition: service_started
-    networks:
-      - quasar-net
-
-  trainer:
-    image: quasar-trainer:latest
-    container_name: quasar-trainer
-    restart: "no"
-    build:
-      context: .
-      dockerfile: agent/Dockerfile
-    command: python agent/train.py
     env_file: .env
     depends_on:
       postgres:
@@ -90,8 +88,8 @@ services:
     container_name: quasar-backend
     restart: unless-stopped
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     env_file: .env
     ports:
       - "${BACKEND_PORT:-4000}:4000"
