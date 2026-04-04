@@ -1,1 +1,1 @@
-from agent import reputation, features, regime
+from agent import reputation as reputation, features as features, regime as regime
