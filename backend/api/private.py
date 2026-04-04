@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from middleware.auth import require_auth
 from services.trade import get_all_trades
 from services.paper import get_paper_status

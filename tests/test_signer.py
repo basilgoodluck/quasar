@@ -1,6 +1,4 @@
 import time
-import pytest
-from eth_account import Account
 from contracts.signer import sign_trade_intent
 
 

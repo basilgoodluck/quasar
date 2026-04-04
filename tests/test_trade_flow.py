@@ -1,6 +1,5 @@
-import pytest
 import json
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 
 def _mock_db_conn():
@@ -89,7 +88,6 @@ def test_full_flow_approved_trade(mock_feat_conn, mock_rep_conn, sample_regime, 
         assert decision["ready"] is True
         assert "reputation" in decision
 
-        from agent.base import BaseStrategy
         result = strategy.open_position(decision, price=65000.0, reputation=0.5)
 
         assert result["executed"] is True

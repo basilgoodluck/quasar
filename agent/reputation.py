@@ -24,7 +24,7 @@ def get_reputation_score() -> float:
 
     total   = len(rows)
     wins    = sum(1 for r in rows if r[0] == "WIN")
-    losses  = sum(1 for r in rows if r[0] == "LOSS")
+    # losses  = sum(1 for r in rows if r[0] == "LOSS")
 
     win_rate = wins / total
 

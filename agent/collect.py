@@ -214,8 +214,8 @@ async def _live_liquidations(session, symbol):
     if not data:
         return
     rows = [
-        (symbol, l["side"], float(l["origQty"]), float(l["price"]), int(l["time"]))
-        for l in data
+        (symbol, order["side"], float(order["origQty"]), float(order["price"]), int(order["time"]))
+        for order in data
     ]
     with get_connection() as conn:
         with conn.cursor() as cur:
