@@ -61,5 +61,5 @@ def sign_trade_intent(
     return {
         "intent":      message,
         "signature":   signed.signature.hex(),
-        "intent_hash": signed.messageHash.hex(),
+        "intent_hash": signed.message_hash.hex(),
     }
