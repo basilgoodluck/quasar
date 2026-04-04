@@ -76,11 +76,5 @@ jobs:
       - name: Apply schema
         run: psql postgresql://quasar:quasar@localhost:5432/quasar_test -f database/schema.sql
 
-      - name: Run unit tests
-        run: pytest tests/unit/ -v
-
-      - name: Run integration tests
-        run: pytest tests/integration/ -v
-
-      - name: Run DB tests
-        run: pytest tests/db/ -v
+      - name: Run tests
+        run: pytest tests/ -v
