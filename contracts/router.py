@@ -8,20 +8,28 @@ from config import (
     AGENT_ID,
 )
 
-_w3     = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
+_w3      = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
+_router  = None
+_account = None
 
-with open("contracts/abi/RiskRouter.json") as f:
-    _abi = json.load(f)
 
-_router  = _w3.eth.contract(address=Web3.to_checksum_address(RISK_ROUTER_ADDRESS), abi=_abi)
-_account = _w3.eth.account.from_key(AGENT_WALLET_PRIVATE_KEY)
+def _get_router():
+    global _router, _account
+    if _router is None:
+        with open("contracts/abi/RiskRouter.json") as f:
+            _abi = json.load(f)
+        _router  = _w3.eth.contract(address=Web3.to_checksum_address(RISK_ROUTER_ADDRESS), abi=_abi)
+        _account = _w3.eth.account.from_key(AGENT_WALLET_PRIVATE_KEY)
+    return _router, _account
 
 
 def get_nonce() -> int:
-    return _router.functions.getNonce(AGENT_ID).call()
+    router, _ = _get_router()
+    return router.functions.getNonce(AGENT_ID).call()
 
 
 def submit_trade_intent(pair: str, action: str, amount_usd: float) -> dict:
+    router, account = _get_router()
     nonce  = get_nonce()
     signed = sign_trade_intent(pair, action, amount_usd, nonce)
 
@@ -39,9 +47,9 @@ def submit_trade_intent(pair: str, action: str, amount_usd: float) -> dict:
         intent["deadline"],
     )
 
-    tx = _router.functions.submitTradeIntent(intent_tuple, signature).build_transaction({
-        "from":     _account.address,
-        "nonce":    _w3.eth.get_transaction_count(_account.address),
+    tx = router.functions.submitTradeIntent(intent_tuple, signature).build_transaction({
+        "from":     account.address,
+        "nonce":    _w3.eth.get_transaction_count(account.address),
         "gas":      300000,
         "gasPrice": _w3.eth.gas_price,
     })
@@ -55,7 +63,7 @@ def submit_trade_intent(pair: str, action: str, amount_usd: float) -> dict:
 
     for log in receipt.logs:
         try:
-            event       = _router.events.TradeApproved().process_log(log)
+            event       = router.events.TradeApproved().process_log(log)
             approved    = True
             intent_hash = event["args"]["intentHash"].hex()
             break
@@ -65,7 +73,7 @@ def submit_trade_intent(pair: str, action: str, amount_usd: float) -> dict:
     if not approved:
         for log in receipt.logs:
             try:
-                event = _router.events.TradeRejected().process_log(log)
+                event = router.events.TradeRejected().process_log(log)
                 return {
                     "approved": False,
                     "reason":   event["args"]["reason"],
@@ -75,8 +83,8 @@ def submit_trade_intent(pair: str, action: str, amount_usd: float) -> dict:
                 pass
 
     return {
-        "approved":     approved,
-        "intent_hash":  intent_hash,
-        "tx_hash":      tx_hash.hex(),
+        "approved":      approved,
+        "intent_hash":   intent_hash,
+        "tx_hash":       tx_hash.hex(),
         "signed_intent": signed,
     }

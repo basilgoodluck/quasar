@@ -8,22 +8,29 @@ from config import (
     AGENT_ID,
 )
 
-_w3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
+_w3       = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
+_registry = None
+_account  = None
 
-with open("contracts/abi/ValidationRegistry.json") as f:
-    _abi = json.load(f)
 
-_registry = _w3.eth.contract(address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS), abi=_abi)
-_account  = _w3.eth.account.from_key(AGENT_WALLET_PRIVATE_KEY)
+def _get_registry():
+    global _registry, _account
+    if _registry is None:
+        with open("contracts/abi/ValidationRegistry.json") as f:
+            _abi = json.load(f)
+        _registry = _w3.eth.contract(address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS), abi=_abi)
+        _account  = _w3.eth.account.from_key(AGENT_WALLET_PRIVATE_KEY)
+    return _registry, _account
 
 
 def _post_on_chain(checkpoint_hash: bytes) -> str:
-    msg     = _w3.eth.account.sign_hash(checkpoint_hash)
-    sig     = msg.signature
+    registry, account = _get_registry()
+    msg = _w3.eth.account.sign_hash(checkpoint_hash)
+    sig = msg.signature
 
-    tx = _registry.functions.postCheckpoint(AGENT_ID, checkpoint_hash, sig).build_transaction({
-        "from":     _account.address,
-        "nonce":    _w3.eth.get_transaction_count(_account.address),
+    tx = registry.functions.postCheckpoint(AGENT_ID, checkpoint_hash, sig).build_transaction({
+        "from":     account.address,
+        "nonce":    _w3.eth.get_transaction_count(account.address),
         "gas":      200000,
         "gasPrice": _w3.eth.gas_price,
     })

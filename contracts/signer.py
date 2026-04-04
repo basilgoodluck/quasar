@@ -16,12 +16,6 @@ _domain = {
 }
 
 _types = {
-    "EIP712Domain": [
-        {"name": "name",             "type": "string"},
-        {"name": "version",          "type": "string"},
-        {"name": "chainId",          "type": "uint256"},
-        {"name": "verifyingContract","type": "address"},
-    ],
     "TradeIntent": [
         {"name": "agentId",          "type": "uint256"},
         {"name": "agentWallet",      "type": "address"},
@@ -57,14 +51,12 @@ def sign_trade_intent(
         "deadline":        deadline,
     }
 
-    structured_data = {
-        "types":       _types,
-        "domain":      _domain,
-        "primaryType": "TradeIntent",
-        "message":     message,
-    }
-
-    signed = Account.sign_typed_data(AGENT_WALLET_PRIVATE_KEY, structured_data)
+    signed = Account.sign_typed_data(
+        AGENT_WALLET_PRIVATE_KEY,
+        domain_data=_domain,
+        message_types=_types,
+        message_data=message,
+    )
 
     return {
         "intent":      message,
