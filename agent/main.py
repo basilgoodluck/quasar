@@ -1,6 +1,6 @@
 import time
 from database.connection import get_connection
-from agent.arc_strategy import ARCStrategy
+from agent.strategy.arc import ARCStrategy
 from agent.features import _fetch_ohlcv
 from agent.reputation import get_reputation_score
 from config import TRAIN_INTERVAL, COLLECT_LOOP_SLEEP

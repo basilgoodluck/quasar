@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from database.connection import get_connection
 from agent.features import build_sequences
-from contracts.model import get_model, save_model
+from agent.model import get_model, save_model
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -18,6 +18,10 @@ BATCH_SIZE = int(os.getenv("TRAIN_BATCH_SIZE", "64"))
 LR         = float(os.getenv("TRAIN_LR", "0.001"))
 VAL_SPLIT  = float(os.getenv("TRAIN_VAL_SPLIT", "0.15"))
 DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Label mapping: 0 = long, 1 = short, 2 = neutral
+LONG_THRESHOLD    = float(os.getenv("LONG_THRESHOLD",    "0.015"))   # fwd return > +1.5% = long
+SHORT_THRESHOLD   = float(os.getenv("SHORT_THRESHOLD",  "-0.015"))   # fwd return < -1.5% = short
 
 
 def get_active_symbols():
@@ -44,6 +48,31 @@ def _log_retrain_event(val_loss: float, real_label_count: int):
             conn.commit()
 
 
+def _convert_to_classes(y_continuous: np.ndarray, real_labels: dict, open_times: np.ndarray, window: int) -> np.ndarray:
+    """Convert continuous labels or real outcomes to class indices: 0=long, 1=short, 2=neutral"""
+    y_class = []
+    for i, val in enumerate(y_continuous):
+        ts = int(open_times[window + i]) if open_times is not None else None
+        if ts and ts in real_labels:
+            outcome = real_labels[ts]
+            if outcome == "WIN":
+                y_class.append(0)   # treat WIN as long confirmation
+            elif outcome == "LOSS":
+                y_class.append(1)   # treat LOSS as short confirmation
+            else:
+                y_class.append(2)   # neutral
+        else:
+            # use forward return thresholds
+            fwd = (val - 0.5) * 0.1  # reverse the clipping done in build_sequences
+            if fwd > LONG_THRESHOLD:
+                y_class.append(0)
+            elif fwd < SHORT_THRESHOLD:
+                y_class.append(1)
+            else:
+                y_class.append(2)
+    return np.array(y_class, dtype=np.int64)
+
+
 def load_data(symbols):
     all_X, all_y = [], []
     for symbol in symbols:
@@ -52,9 +81,10 @@ def load_data(symbols):
         if X is None:
             logger.warning(f"Not enough data for {symbol}, skipping")
             continue
+        y_class = _convert_to_classes(y, {}, None, WINDOW)
         all_X.append(X)
-        all_y.append(y)
-        logger.info(f"{symbol}: {len(X)} sequences")
+        all_y.append(y_class)
+        logger.info(f"{symbol}: {len(X)} sequences | long={sum(y_class==0)} short={sum(y_class==1)} neutral={sum(y_class==2)}")
 
     if not all_X:
         raise RuntimeError("No data available for training")
@@ -87,7 +117,7 @@ def train():
     input_size = X.shape[2]
     model      = get_model(input_size, DEVICE)
     optimizer  = torch.optim.Adam(model.parameters(), lr=LR)
-    criterion  = nn.MSELoss()
+    criterion  = nn.CrossEntropyLoss()
     scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
 
     best_val_loss = float("inf")

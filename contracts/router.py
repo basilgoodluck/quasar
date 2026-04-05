@@ -1,9 +1,9 @@
-import json
 from web3 import Web3
 from contracts.signer import sign_trade_intent
 from config import (
     SEPOLIA_RPC_URL,
     RISK_ROUTER_ADDRESS,
+    RISK_ROUTER_ABI,
     AGENT_WALLET_PRIVATE_KEY,
     AGENT_ID,
 )
@@ -16,16 +16,14 @@ _account = None
 def _get_router():
     global _router, _account
     if _router is None:
-        with open("contracts/abi/RiskRouter.json") as f:
-            _abi = json.load(f)
-        _router  = _w3.eth.contract(address=Web3.to_checksum_address(RISK_ROUTER_ADDRESS), abi=_abi)
+        _router  = _w3.eth.contract(address=Web3.to_checksum_address(RISK_ROUTER_ADDRESS), abi=RISK_ROUTER_ABI)
         _account = _w3.eth.account.from_key(AGENT_WALLET_PRIVATE_KEY)
     return _router, _account
 
 
 def get_nonce() -> int:
     router, _ = _get_router()
-    return router.functions.getNonce(AGENT_ID).call()
+    return router.functions.getIntentNonce(AGENT_ID).call()
 
 
 def submit_trade_intent(pair: str, action: str, amount_usd: float) -> dict:

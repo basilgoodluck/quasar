@@ -101,25 +101,16 @@ def _fetch_real_labels(symbol: str) -> dict:
 def _compute_features(df, cvd_df, funding_df, oi_df, liq_rows):
     features = pd.DataFrame(index=df.index)
 
+    # price action
     features["log_return"] = np.log(df["close"] / df["close"].shift(1))
     features["hl_range"]   = (df["high"] - df["low"]) / df["close"]
     features["vol_ratio"]  = df["volume"] / df["volume"].rolling(20).mean()
     features["buy_ratio"]  = df["taker_buy_volume"] / (df["volume"] + 1e-9)
 
-    for span in [8, 20, 50]:
-        ema = df["close"].ewm(span=span).mean()
-        features[f"ema_{span}_dist"] = (df["close"] - ema) / df["close"]
+    # realized volatility
+    features["realized_vol"] = features["log_return"].rolling(20).std() * np.sqrt(365 * 24 * 4)
 
-    log_ret = features["log_return"]
-    features["realized_vol"] = log_ret.rolling(20).std() * np.sqrt(365 * 24 * 4)
-
-    tr = pd.concat([
-        df["high"] - df["low"],
-        (df["high"] - df["close"].shift()).abs(),
-        (df["low"]  - df["close"].shift()).abs(),
-    ], axis=1).max(axis=1)
-    features["atr_pct"] = tr.rolling(14).mean() / df["close"]
-
+    # CVD and delta
     if cvd_df is not None and len(cvd_df) >= len(df):
         cvd_aligned   = cvd_df["cvd"].values[-len(df):]
         delta_aligned = cvd_df["delta"].values[-len(df):]
@@ -129,19 +120,22 @@ def _compute_features(df, cvd_df, funding_df, oi_df, liq_rows):
         features["cvd_norm"]   = 0.0
         features["delta_norm"] = 0.0
 
+    # funding rate — directionally meaningful: positive = overleveraged long, negative = overleveraged short
     if funding_df is not None and len(funding_df) > 0:
-        avg_funding    = funding_df["funding_rate"].rolling(8, min_periods=1).mean().iloc[-1]
+        avg_funding = funding_df["funding_rate"].rolling(8, min_periods=1).mean().iloc[-1]
         features["funding"] = float(np.clip(avg_funding / 0.005, -1.0, 1.0))
     else:
         features["funding"] = 0.0
 
+    # OI change — rising = new participation, falling = unwinding
     if oi_df is not None and len(oi_df) > 4:
-        oi_vals          = oi_df["open_interest"].values
-        oi_change        = (oi_vals[-1] - oi_vals[-5]) / (oi_vals[-5] + 1e-9)
+        oi_vals   = oi_df["open_interest"].values
+        oi_change = (oi_vals[-1] - oi_vals[-5]) / (oi_vals[-5] + 1e-9)
         features["oi_change"] = float(np.clip(oi_change, -1.0, 1.0))
     else:
         features["oi_change"] = 0.0
 
+    # liquidations — long_liq = forced selling (potential bottom), short_liq = forced buying (potential top)
     if liq_rows:
         long_liq  = sum(float(q) for s, q in liq_rows if s == "SELL")
         short_liq = sum(float(q) for s, q in liq_rows if s == "BUY")
@@ -172,11 +166,11 @@ def build_sequences(symbol, interval="15m", window=96, limit=5000):
     if df is None or len(df) < window + 10:
         return None, None
 
-    features     = _compute_features(df, cvd_df, fund_df, oi_df, liq_rows)
-    normed       = _normalize(features)
-    real_labels  = _fetch_real_labels(symbol)
-    closes       = df["close"].values[-len(features):]
-    open_times   = df["open_time"].values[-len(features):]
+    features    = _compute_features(df, cvd_df, fund_df, oi_df, liq_rows)
+    normed      = _normalize(features)
+    real_labels = _fetch_real_labels(symbol)
+    closes      = df["close"].values[-len(features):]
+    open_times  = df["open_time"].values[-len(features):]
 
     X, y = [], []
     for i in range(window, len(normed)):

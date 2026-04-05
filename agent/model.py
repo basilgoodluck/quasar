@@ -18,14 +18,13 @@ class RegimeLSTM(nn.Module):
             nn.Linear(hidden_size, 64),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(64, 1),
-            nn.Sigmoid(),
+            nn.Linear(64, 3),  # long, short, neutral
         )
 
     def forward(self, x):
         out, _ = self.lstm(x)
         out = self.dropout(out[:, -1, :])
-        return self.head(out).squeeze(-1)
+        return torch.softmax(self.head(out), dim=-1)  # returns [p_long, p_short, p_neutral]
 
 
 def get_model(input_size, device="cpu"):

@@ -1,9 +1,57 @@
 import time
+from web3 import Web3
 from database.connection import get_connection
-from config import REPUTATION_MIN_TRADES, AGENT_ID
+from config import (
+    REPUTATION_MIN_TRADES,
+    AGENT_ID,
+    SEPOLIA_RPC_URL,
+    REPUTATION_REGISTRY_ADDRESS,
+    REPUTATION_REGISTRY_ABI,
+    AGENT_WALLET_PRIVATE_KEY,
+)
 from logger import get_logger
 
 logger = get_logger(__name__)
+
+_w3       = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
+_registry = None
+_account  = None
+
+
+def _get_registry():
+    global _registry, _account
+    if _registry is None:
+        _registry = _w3.eth.contract(
+            address=Web3.to_checksum_address(REPUTATION_REGISTRY_ADDRESS),
+            abi=REPUTATION_REGISTRY_ABI,
+        )
+        _account = _w3.eth.account.from_key(AGENT_WALLET_PRIVATE_KEY)
+    return _registry, _account
+
+
+def _submit_on_chain(score: float, outcome_ref: bytes, comment: str):
+    registry, account = _get_registry()
+    score_int = int(score * 100)  # 0-100
+
+    try:
+        tx = registry.functions.submitFeedback(
+            AGENT_ID,
+            score_int,
+            outcome_ref,
+            comment,
+            0,  # feedbackType 0 = self-reported
+        ).build_transaction({
+            "from":     account.address,
+            "nonce":    _w3.eth.get_transaction_count(account.address),
+            "gas":      200000,
+            "gasPrice": _w3.eth.gas_price,
+        })
+        signed_tx = _w3.eth.account.sign_transaction(tx, AGENT_WALLET_PRIVATE_KEY)
+        tx_hash   = _w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        _w3.eth.wait_for_transaction_receipt(tx_hash)
+        logger.info(f"[reputation] on-chain feedback submitted tx={tx_hash.hex()}")
+    except Exception as e:
+        logger.error(f"[reputation] on-chain submission failed: {e}")
 
 
 def get_reputation_score() -> float:
@@ -22,21 +70,13 @@ def get_reputation_score() -> float:
         logger.info(f"[reputation] not enough trades yet ({len(rows) if rows else 0}/{REPUTATION_MIN_TRADES})")
         return 0.0
 
-    total   = len(rows)
-    wins    = sum(1 for r in rows if r[0] == "WIN")
-    # losses  = sum(1 for r in rows if r[0] == "LOSS")
-
+    total    = len(rows)
+    wins     = sum(1 for r in rows if r[0] == "WIN")
     win_rate = wins / total
 
-    confident_and_right = sum(
-        1 for r in rows if r[0] == "WIN" and r[1] >= 0.65
-    )
-    confident_and_wrong = sum(
-        1 for r in rows if r[0] == "LOSS" and r[1] >= 0.65
-    )
-    consistency = (
-        confident_and_right / (confident_and_right + confident_and_wrong + 1e-9)
-    )
+    confident_and_right = sum(1 for r in rows if r[0] == "WIN"  and r[1] >= 0.65)
+    confident_and_wrong = sum(1 for r in rows if r[0] == "LOSS" and r[1] >= 0.65)
+    consistency = confident_and_right / (confident_and_right + confident_and_wrong + 1e-9)
 
     streak_bonus = 0.0
     streak       = 0
@@ -58,7 +98,7 @@ def get_reputation_score() -> float:
     return score
 
 
-def save_reputation_snapshot(score: float):
+def save_reputation_snapshot(score: float, outcome_ref: bytes = None):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -66,6 +106,12 @@ def save_reputation_snapshot(score: float):
                 VALUES (%s, %s, %s)
             """, (AGENT_ID, score, int(time.time())))
             conn.commit()
+
+    if outcome_ref is None:
+        outcome_ref = bytes(32)
+
+    comment = f"score={score}"
+    _submit_on_chain(score, outcome_ref, comment)
 
 
 def get_reputation_history(limit: int = 50) -> list:
