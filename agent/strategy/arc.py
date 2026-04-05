@@ -1,7 +1,7 @@
 import numpy as np
 from agent.strategy.base import BaseStrategy
 from agent.regime import detect_regime
-from agent.openai import get_trade_params
+from agent.openai_client import get_trade_params
 from agent.features import _fetch_ohlcv
 from agent.reputation import get_reputation_score
 from config import TRAIN_INTERVAL, STRUCTURE_LOOKBACK, ARC_FISHER_PERIOD

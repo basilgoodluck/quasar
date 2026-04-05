@@ -6,6 +6,6 @@ ENV PYTHONPATH=/app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY agent/collect.py .
+COPY . .
 
 CMD ["python", "agent/collect.py"]
