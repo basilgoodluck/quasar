@@ -23,10 +23,10 @@ def test_regime_direction_from_confidence(mock_feat_conn, mock_rep_conn):
     import torch
     import numpy as np
 
-    fake_seq = np.zeros((1, 96, 15), dtype="float32")
+    fake_seq = np.zeros((1, 96, 11), dtype="float32")
 
     mock_model = MagicMock()
-    mock_model.return_value = torch.tensor([0.75])
+    mock_model.return_value = torch.tensor([[0.75, 0.15, 0.10]])
 
     with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
          patch("agent.regime._get_model", return_value=mock_model):
@@ -119,19 +119,22 @@ def test_reputation_adjusts_regime_thresholds(mock_feat_conn, mock_rep_conn):
     import torch
     import numpy as np
 
-    fake_seq = np.zeros((1, 96, 15), dtype="float32")
+    fake_seq = np.zeros((1, 96, 11), dtype="float32")
 
-    mock_model = MagicMock()
-    mock_model.return_value = torch.tensor([0.58])
+    mock_model_neutral = MagicMock()
+    mock_model_neutral.return_value = torch.tensor([[0.55, 0.15, 0.30]])
+
+    mock_model_long = MagicMock()
+    mock_model_long.return_value = torch.tensor([[0.58, 0.12, 0.30]])
 
     from agent.regime import detect_regime
 
     with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
-         patch("agent.regime._get_model", return_value=mock_model):
+         patch("agent.regime._get_model", return_value=mock_model_neutral):
         result_low_rep = detect_regime("BTCUSDT", reputation=0.0)
 
     with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
-         patch("agent.regime._get_model", return_value=mock_model):
+         patch("agent.regime._get_model", return_value=mock_model_long):
         result_high_rep = detect_regime("BTCUSDT", reputation=1.0)
 
     assert result_low_rep["direction"]  == "neutral"

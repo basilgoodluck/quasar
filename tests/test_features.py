@@ -48,8 +48,7 @@ def test_feature_columns_present(mock_conn):
     result = _compute_features(df, cvd_df, None, None, [])
     expected = [
         "log_return", "hl_range", "vol_ratio", "buy_ratio",
-        "ema_8_dist", "ema_20_dist", "ema_50_dist",
-        "realized_vol", "atr_pct", "cvd_norm", "delta_norm",
+        "realized_vol", "cvd_norm", "delta_norm",
         "funding", "oi_change", "long_liq_ratio", "short_liq_ratio",
     ]
     for col in expected:

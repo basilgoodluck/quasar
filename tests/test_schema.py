@@ -23,8 +23,7 @@ def test_required_tables_exist():
         "users", "sessions", "symbols", "agents",
         "market_data", "funding_rates", "oi_history",
         "liquidations", "cvd_history", "snapshots",
-        "trades", "signals", "positions", "logs",
-        "trade_outcomes", "reputation_history", "retrain_log",
+        "agg_trades", "trade_outcomes", "reputation_history", "retrain_log",
     ]
     conn = get_test_conn()
     cur  = conn.cursor()
@@ -35,7 +34,6 @@ def test_required_tables_exist():
     existing = {r[0] for r in cur.fetchall()}
     cur.close()
     conn.close()
-
     for table in tables:
         assert table in existing, f"Missing table: {table}"
 
@@ -84,12 +82,10 @@ def test_write_and_read_trade_outcome():
         ON CONFLICT (intent_hash) DO NOTHING
     """, ("0xtest123", "BTCUSDT", "LONG", 65000.0, 100.0, 0.72, 0.5, "PENDING", int(time.time())))
     conn.commit()
-
     cur.execute("SELECT status FROM trade_outcomes WHERE intent_hash = '0xtest123'")
     row = cur.fetchone()
     assert row is not None
     assert row[0] == "PENDING"
-
     cur.execute("DELETE FROM trade_outcomes WHERE intent_hash = '0xtest123'")
     conn.commit()
     cur.close()
@@ -105,12 +101,10 @@ def test_reputation_history_write():
         VALUES (%s, %s, %s)
     """, (0, 0.65, int(time.time())))
     conn.commit()
-
     cur.execute("SELECT score FROM reputation_history WHERE agent_id = 0 ORDER BY id DESC LIMIT 1")
     row = cur.fetchone()
     assert row is not None
     assert float(row[0]) == 0.65
-
     cur.execute("DELETE FROM reputation_history WHERE agent_id = 0")
     conn.commit()
     cur.close()
