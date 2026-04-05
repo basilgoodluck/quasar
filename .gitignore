@@ -1,5 +1,31 @@
+# Project files
 plan.md
-/logs/*.log
-/logs/*.txt
 roadmap.md
+
+# Logs
+logs/
+*.log
+*.txt
+
+# Environment
 .env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/

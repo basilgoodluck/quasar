@@ -1,3 +1,4 @@
+import json
 from web3 import Web3
 from contracts.signer import sign_trade_intent
 from config import (
@@ -48,7 +49,6 @@ def submit_trade_intent(pair: str, action: str, amount_usd: float) -> dict:
     tx = router.functions.submitTradeIntent(intent_tuple, signature).build_transaction({
         "from":     account.address,
         "nonce":    _w3.eth.get_transaction_count(account.address),
-        "gas":      300000,
         "gasPrice": _w3.eth.gas_price,
     })
 

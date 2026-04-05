@@ -1,5 +1,5 @@
 import time
-from web3 import Web3
+from register import Web3
 from database.connection import get_connection
 from config import (
     REPUTATION_MIN_TRADES,

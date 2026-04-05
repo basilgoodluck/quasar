@@ -9,7 +9,7 @@ from config import (
 )
 
 _domain = {
-    "name": "AITradingAgent",
+    "name": "RiskRouter",
     "version": "1",
     "chainId": CHAIN_ID,
     "verifyingContract": RISK_ROUTER_ADDRESS,

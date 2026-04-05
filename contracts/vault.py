@@ -1,4 +1,4 @@
-from web3 import Web3
+from register import Web3
 from config import (
     SEPOLIA_RPC_URL,
     HACKATHON_VAULT_ADDRESS,

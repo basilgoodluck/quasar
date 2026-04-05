@@ -21,27 +21,6 @@ def _get_registry():
     return _registry, _account
 
 
-def _post_on_chain(checkpoint_hash: bytes, score: int, notes: str) -> str:
-    registry, account = _get_registry()
-
-    tx = registry.functions.postEIP712Attestation(
-        AGENT_ID,
-        checkpoint_hash,
-        score,
-        notes,
-    ).build_transaction({
-        "from":     account.address,
-        "nonce":    _w3.eth.get_transaction_count(account.address),
-        "gas":      200000,
-        "gasPrice": _w3.eth.gas_price,
-    })
-
-    signed_tx = _w3.eth.account.sign_transaction(tx, AGENT_WALLET_PRIVATE_KEY)
-    tx_hash   = _w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    _w3.eth.wait_for_transaction_receipt(tx_hash)
-    return tx_hash.hex()
-
-
 def post_checkpoint(
     action: str,
     pair: str,
@@ -50,8 +29,9 @@ def post_checkpoint(
     reasoning: str,
     confidence: float,
     intent_hash: str,
-    score: int = 85,
 ) -> dict:
+    registry, account = _get_registry()
+
     reasoning_hash = _w3.keccak(text=reasoning)
     encoded = _w3.codec.encode(
         ["uint256", "string", "string", "uint256", "uint256", "bytes32", "uint256", "bytes32", "uint256"],
@@ -68,11 +48,25 @@ def post_checkpoint(
         ],
     )
     checkpoint_hash = _w3.keccak(encoded)
-    tx_hash         = _post_on_chain(checkpoint_hash, score, reasoning)
+
+    tx = registry.functions.postEIP712Attestation(
+        AGENT_ID,
+        checkpoint_hash,
+        int(confidence * 100),
+        reasoning
+    ).build_transaction({
+        "from":     account.address,
+        "nonce":    _w3.eth.get_transaction_count(account.address),
+        "gasPrice": _w3.eth.gas_price,
+    })
+
+    signed_tx = _w3.eth.account.sign_transaction(tx, AGENT_WALLET_PRIVATE_KEY)
+    tx_hash   = _w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    _w3.eth.wait_for_transaction_receipt(tx_hash)
 
     return {
         "checkpoint_hash": checkpoint_hash.hex(),
-        "tx_hash":         tx_hash,
+        "tx_hash":         tx_hash.hex(),
         "type":            "TRADE",
     }
 
@@ -81,8 +75,9 @@ def post_skip_checkpoint(
     pair: str,
     reason: str,
     confidence: float,
-    score: int = 70,
 ) -> dict:
+    registry, account = _get_registry()
+
     reasoning_hash = _w3.keccak(text=reason)
     encoded = _w3.codec.encode(
         ["uint256", "string", "string", "bytes32", "uint256", "uint256"],
@@ -96,11 +91,25 @@ def post_skip_checkpoint(
         ],
     )
     checkpoint_hash = _w3.keccak(encoded)
-    tx_hash         = _post_on_chain(checkpoint_hash, score, reason)
+
+    tx = registry.functions.postEIP712Attestation(
+        AGENT_ID,
+        checkpoint_hash,
+        int(confidence * 100),
+        reason
+    ).build_transaction({
+        "from":     account.address,
+        "nonce":    _w3.eth.get_transaction_count(account.address),
+        "gasPrice": _w3.eth.gas_price,
+    })
+
+    signed_tx = _w3.eth.account.sign_transaction(tx, AGENT_WALLET_PRIVATE_KEY)
+    tx_hash   = _w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    _w3.eth.wait_for_transaction_receipt(tx_hash)
 
     return {
         "checkpoint_hash": checkpoint_hash.hex(),
-        "tx_hash":         tx_hash,
+        "tx_hash":         tx_hash.hex(),
         "type":            "SKIP",
         "reason":          reason,
     }
@@ -114,8 +123,9 @@ def post_outcome_checkpoint(
     entry_price: float,
     exit_price: float,
     confidence_at_entry: float,
-    score: int = 80,
 ) -> dict:
+    registry, account = _get_registry()
+
     pnl_pct = ((exit_price - entry_price) / entry_price) if action == "LONG" else ((entry_price - exit_price) / entry_price)
 
     encoded = _w3.codec.encode(
@@ -131,12 +141,25 @@ def post_outcome_checkpoint(
         ],
     )
     checkpoint_hash = _w3.keccak(encoded)
-    notes   = f"Outcome: {outcome}, PnL: {round(pnl_pct * 100, 4)}%"
-    tx_hash = _post_on_chain(checkpoint_hash, score, notes)
+
+    tx = registry.functions.postEIP712Attestation(
+        AGENT_ID,
+        checkpoint_hash,
+        int(confidence_at_entry * 100),
+        f"Outcome: {outcome}, PnL: {round(pnl_pct * 100, 4)}%"
+    ).build_transaction({
+        "from":     account.address,
+        "nonce":    _w3.eth.get_transaction_count(account.address),
+        "gasPrice": _w3.eth.gas_price,
+    })
+
+    signed_tx = _w3.eth.account.sign_transaction(tx, AGENT_WALLET_PRIVATE_KEY)
+    tx_hash   = _w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    _w3.eth.wait_for_transaction_receipt(tx_hash)
 
     return {
         "checkpoint_hash":      checkpoint_hash.hex(),
-        "tx_hash":              tx_hash,
+        "tx_hash":              tx_hash.hex(),
         "type":                 "OUTCOME",
         "outcome":              outcome,
         "pnl_pct":              round(pnl_pct * 100, 4),
