@@ -86,14 +86,14 @@ def _fetch_real_labels(symbol: str) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT created_at, outcome
+                SELECT created_at, status
                 FROM trade_outcomes
                 WHERE pair = %s AND status IN ('WIN', 'LOSS', 'NEUTRAL')
             """, (symbol,))
             rows = cur.fetchall()
     mapping = {}
-    for created_at, outcome in rows:
-        label = 1.0 if outcome == "WIN" else (0.0 if outcome == "LOSS" else 0.5)
+    for created_at, status in rows:
+        label = 1.0 if status == "WIN" else (0.0 if status == "LOSS" else 0.5)
         mapping[int(created_at)] = label
     return mapping
 

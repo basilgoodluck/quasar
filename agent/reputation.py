@@ -58,7 +58,7 @@ def get_reputation_score() -> float:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT outcome, confidence_at_entry
+                SELECT status, confidence_at_entry
                 FROM trade_outcomes
                 WHERE status IN ('WIN', 'LOSS', 'NEUTRAL')
                 ORDER BY created_at DESC
