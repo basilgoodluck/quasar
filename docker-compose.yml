@@ -92,22 +92,7 @@ services:
         condition: service_healthy
     networks:
       - quasar-net
-
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: quasar-pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
-    ports:
-      - "8080:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - quasar-net
-
+      
   redis:
     image: redis:7-alpine
     container_name: quasar-redis
