@@ -48,6 +48,8 @@ services:
         condition: service_healthy
     networks:
       - quasar-net
+    volumes:
+      - models_data:/app/models
 
   outcome_tracker:
     image: noblebasil/quasar-outcome-tracker:latest
@@ -62,6 +64,8 @@ services:
         condition: service_healthy
     networks:
       - quasar-net
+    volumes:
+      - models_data:/app/models
 
   agent:
     image: noblebasil/quasar-agent:latest
@@ -76,6 +80,8 @@ services:
         condition: service_healthy
     networks:
       - quasar-net
+    volumes:
+      - models_data:/app/models
 
   backend:
     image: noblebasil/quasar-backend:latest
@@ -92,7 +98,9 @@ services:
         condition: service_healthy
     networks:
       - quasar-net
-      
+    volumes:
+      - models_data:/app/models
+
   redis:
     image: redis:7-alpine
     container_name: quasar-redis
@@ -108,3 +116,4 @@ networks:
 
 volumes:
   postgres_data:
+  models_data:

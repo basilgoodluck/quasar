@@ -1,0 +1,16 @@
+[
+  {"timestamp":"2026-04-05T22:00:00Z","reputation_score":92.4,"validation_score":94.1,"checkpoint_posted":true},
+  {"timestamp":"2026-04-05T20:00:00Z","reputation_score":91.8,"validation_score":93.5,"checkpoint_posted":true},
+  {"timestamp":"2026-04-05T18:00:00Z","reputation_score":90.2,"validation_score":91.7,"checkpoint_posted":false},
+  {"timestamp":"2026-04-05T16:00:00Z","reputation_score":93.1,"validation_score":95.2,"checkpoint_posted":true},
+  {"timestamp":"2026-04-05T14:00:00Z","reputation_score":89.7,"validation_score":90.8,"checkpoint_posted":false},
+  {"timestamp":"2026-04-05T12:00:00Z","reputation_score":94.5,"validation_score":96.3,"checkpoint_posted":true},
+  {"timestamp":"2026-04-05T10:00:00Z","reputation_score":91.3,"validation_score":92.9,"checkpoint_posted":true},
+  {"timestamp":"2026-04-05T08:00:00Z","reputation_score":88.9,"validation_score":89.4,"checkpoint_posted":false},
+  {"timestamp":"2026-04-05T06:00:00Z","reputation_score":93.8,"validation_score":94.7,"checkpoint_posted":true},
+  {"timestamp":"2026-04-05T04:00:00Z","reputation_score":92.6,"validation_score":93.8,"checkpoint_posted":true},
+  {"timestamp":"2026-04-05T02:00:00Z","reputation_score":90.5,"validation_score":91.2,"checkpoint_posted":false},
+  {"timestamp":"2026-04-05T00:00:00Z","reputation_score":94.2,"validation_score":95.6,"checkpoint_posted":true},
+  {"timestamp":"2026-04-04T22:00:00Z","reputation_score":91.9,"validation_score":92.4,"checkpoint_posted":true},
+  {"timestamp":"2026-04-04T20:00:00Z","reputation_score":89.4,"validation_score":90.1,"checkpoint_posted":false}
+]

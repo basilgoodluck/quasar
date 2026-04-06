@@ -1,0 +1,20 @@
+[
+  {"timestamp":"2026-04-05T21:45:00Z","equity":24892.34,"peak_equity":25240.12,"drawdown":347.78,"trade_id":"trade_001","pnl":1125.4,"is_win":true},
+  {"timestamp":"2026-04-05T20:12:00Z","equity":23766.94,"peak_equity":25240.12,"drawdown":1473.18,"trade_id":"trade_002","pnl":-98.45,"is_win":false},
+  {"timestamp":"2026-04-05T19:30:00Z","equity":24052.69,"peak_equity":25240.12,"drawdown":1187.43,"trade_id":"trade_003","pnl":285.75,"is_win":true},
+  {"timestamp":"2026-04-05T18:05:00Z","equity":23806.89,"peak_equity":25240.12,"drawdown":1433.23,"trade_id":"trade_004","pnl":245.8,"is_win":true},
+  {"timestamp":"2026-04-05T17:22:00Z","equity":23974.19,"peak_equity":25240.12,"drawdown":1265.93,"trade_id":"trade_005","pnl":167.3,"is_win":true},
+  {"timestamp":"2026-04-05T16:40:00Z","equity":24286.64,"peak_equity":25240.12,"drawdown":953.48,"trade_id":"trade_006","pnl":312.45,"is_win":true},
+  {"timestamp":"2026-04-05T15:10:00Z","equity":24197.44,"peak_equity":25240.12,"drawdown":1042.68,"trade_id":"trade_007","pnl":-89.2,"is_win":false},
+  {"timestamp":"2026-04-05T14:55:00Z","equity":24343.04,"peak_equity":25240.12,"drawdown":897.08,"trade_id":"trade_008","pnl":145.6,"is_win":true},
+  {"timestamp":"2026-04-05T13:30:00Z","equity":24132.54,"peak_equity":25240.12,"drawdown":1107.58,"trade_id":"trade_009","pnl":210.5,"is_win":true},
+  {"timestamp":"2026-04-05T12:15:00Z","equity":24531.24,"peak_equity":25240.12,"drawdown":708.88,"trade_id":"trade_010","pnl":398.7,"is_win":true},
+  {"timestamp":"2026-04-05T11:05:00Z","equity":24798.54,"peak_equity":25240.12,"drawdown":441.58,"trade_id":"trade_011","pnl":267.3,"is_win":true},
+  {"timestamp":"2026-04-05T10:40:00Z","equity":24663.74,"peak_equity":25240.12,"drawdown":576.38,"trade_id":"trade_012","pnl":134.8,"is_win":true},
+  {"timestamp":"2026-04-05T09:20:00Z","equity":24842.54,"peak_equity":25240.12,"drawdown":397.58,"trade_id":"trade_013","pnl":378.2,"is_win":true},
+  {"timestamp":"2026-04-05T08:50:00Z","equity":24700.00,"peak_equity":25240.12,"drawdown":540.12,"trade_id":"trade_014","pnl":-142.75,"is_win":false},
+  {"timestamp":"2026-04-05T07:35:00Z","equity":24898.40,"peak_equity":25240.12,"drawdown":341.72,"trade_id":"trade_015","pnl":198.4,"is_win":true},
+  {"timestamp":"2026-04-05T06:10:00Z","equity":25087.60,"peak_equity":25240.12,"drawdown":152.52,"trade_id":"trade_016","pnl":189.2,"is_win":true},
+  {"timestamp":"2026-04-05T05:25:00Z","equity":24922.30,"peak_equity":25240.12,"drawdown":317.82,"trade_id":"trade_017","pnl":165.3,"is_win":true},
+  {"timestamp":"2026-04-05T04:00:00Z","equity":25146.90,"peak_equity":25240.12,"drawdown":93.22,"trade_id":"trade_018","pnl":224.6,"is_win":true}
+]

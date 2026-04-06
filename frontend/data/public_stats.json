@@ -1,0 +1,36 @@
+{
+  "total_pnl": 12456.78,
+  "win_rate": 73.8,
+  "total_trades": 284,
+  "equity_history": [
+    {"timestamp": "2026-04-05T22:00:00Z", "equity": 24892.34},
+    {"timestamp": "2026-04-05T21:00:00Z", "equity": 23766.94},
+    {"timestamp": "2026-04-05T20:00:00Z", "equity": 24052.69},
+    {"timestamp": "2026-04-05T19:00:00Z", "equity": 23806.89},
+    {"timestamp": "2026-04-05T18:00:00Z", "equity": 23974.19},
+    {"timestamp": "2026-04-05T17:00:00Z", "equity": 24286.64},
+    {"timestamp": "2026-04-05T16:00:00Z", "equity": 24197.44},
+    {"timestamp": "2026-04-05T15:00:00Z", "equity": 24343.04},
+    {"timestamp": "2026-04-05T14:00:00Z", "equity": 24132.54},
+    {"timestamp": "2026-04-05T13:00:00Z", "equity": 24531.24},
+    {"timestamp": "2026-04-05T12:00:00Z", "equity": 24798.54},
+    {"timestamp": "2026-04-05T11:00:00Z", "equity": 24663.74},
+    {"timestamp": "2026-04-05T10:00:00Z", "equity": 24842.54},
+    {"timestamp": "2026-04-05T09:00:00Z", "equity": 25120.15},
+    {"timestamp": "2026-04-05T08:00:00Z", "equity": 24985.60},
+    {"timestamp": "2026-04-05T07:00:00Z", "equity": 25240.12},
+    {"timestamp": "2026-04-05T06:00:00Z", "equity": 25018.45},
+    {"timestamp": "2026-04-05T05:00:00Z", "equity": 24765.30},
+    {"timestamp": "2026-04-05T04:00:00Z", "equity": 24612.80},
+    {"timestamp": "2026-04-05T03:00:00Z", "equity": 24890.25},
+    {"timestamp": "2026-04-05T02:00:00Z", "equity": 24567.90},
+    {"timestamp": "2026-04-05T01:00:00Z", "equity": 24345.60},
+    {"timestamp": "2026-04-05T00:00:00Z", "equity": 24120.75},
+    {"timestamp": "2026-04-04T23:00:00Z", "equity": 23985.40},
+    {"timestamp": "2026-04-04T22:00:00Z", "equity": 24412.30}
+  ],
+  "trade_outcomes": [
+    {"outcome": "win", "count": 209},
+    {"outcome": "loss", "count": 75}
+  ]
+}
