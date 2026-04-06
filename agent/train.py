@@ -10,7 +10,7 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-MODEL_DIR  = os.getenv("MODEL_DIR", "models")
+MODEL_DIR  = "/opt/projects/quasar/models"
 INTERVAL   = os.getenv("TRAIN_INTERVAL", "15m")
 WINDOW     = int(os.getenv("TRAIN_WINDOW", "96"))
 EPOCHS     = int(os.getenv("TRAIN_EPOCHS", "50"))
@@ -19,9 +19,8 @@ LR         = float(os.getenv("TRAIN_LR", "0.001"))
 VAL_SPLIT  = float(os.getenv("TRAIN_VAL_SPLIT", "0.15"))
 DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Label mapping: 0 = long, 1 = short, 2 = neutral
-LONG_THRESHOLD    = float(os.getenv("LONG_THRESHOLD",    "0.015"))   # fwd return > +1.5% = long
-SHORT_THRESHOLD   = float(os.getenv("SHORT_THRESHOLD",  "-0.015"))   # fwd return < -1.5% = short
+LONG_THRESHOLD    = float(os.getenv("LONG_THRESHOLD", "0.015"))
+SHORT_THRESHOLD   = float(os.getenv("SHORT_THRESHOLD", "-0.015"))
 
 
 def get_active_symbols():
@@ -49,21 +48,19 @@ def _log_retrain_event(val_loss: float, real_label_count: int):
 
 
 def _convert_to_classes(y_continuous: np.ndarray, real_labels: dict, open_times: np.ndarray, window: int) -> np.ndarray:
-    """Convert continuous labels or real outcomes to class indices: 0=long, 1=short, 2=neutral"""
     y_class = []
     for i, val in enumerate(y_continuous):
         ts = int(open_times[window + i]) if open_times is not None else None
         if ts and ts in real_labels:
             outcome = real_labels[ts]
             if outcome == "WIN":
-                y_class.append(0)   # treat WIN as long confirmation
+                y_class.append(0)
             elif outcome == "LOSS":
-                y_class.append(1)   # treat LOSS as short confirmation
+                y_class.append(1)
             else:
-                y_class.append(2)   # neutral
+                y_class.append(2)
         else:
-            # use forward return thresholds
-            fwd = (val - 0.5) * 0.1  # reverse the clipping done in build_sequences
+            fwd = (val - 0.5) * 0.1
             if fwd > LONG_THRESHOLD:
                 y_class.append(0)
             elif fwd < SHORT_THRESHOLD:
@@ -112,7 +109,7 @@ def train():
     train_ds, val_ds = random_split(dataset, [train_size, val_size])
 
     train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-    val_dl   = DataLoader(val_ds,   batch_size=BATCH_SIZE)
+    val_dl   = DataLoader(val_ds, batch_size=BATCH_SIZE)
 
     input_size = X.shape[2]
     model      = get_model(input_size, DEVICE)
@@ -146,15 +143,12 @@ def train():
         val_loss   /= len(val_dl)
         scheduler.step(val_loss)
 
-        logger.info(f"Epoch {epoch}/{EPOCHS} | train={train_loss:.6f} | val={val_loss:.6f}")
-
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            os.makedirs(MODEL_DIR, exist_ok=True)
             save_model(model, os.path.join(MODEL_DIR, "regime_lstm.pt"))
-            logger.info(f"Model saved (val={val_loss:.6f})")
 
     _log_retrain_event(best_val_loss, real_count)
-    logger.info(f"Training complete — real labels used: {real_count}")
 
 
 if __name__ == "__main__":
