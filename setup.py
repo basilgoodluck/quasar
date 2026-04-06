@@ -1,5 +1,9 @@
 from web3 import Web3
 from config import (
+    HACKATHON_VAULT_ABI,
+    HACKATHON_VAULT_ADDRESS,
+    RISK_ROUTER_ABI,
+    RISK_ROUTER_ADDRESS,
     SEPOLIA_RPC_URL,
     AGENT_ID,
     VALIDATION_REGISTRY_ABI,
@@ -93,16 +97,16 @@ w3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
 # ─── Step 4: Verify vault balance ─────────────────────────────────────────────
 # Optional sanity check after step 2
 
-# vault = w3.eth.contract(
-#     address=Web3.to_checksum_address(HACKATHON_VAULT_ADDRESS),
-#     abi=HACKATHON_VAULT_ABI
-# )
+vault = w3.eth.contract(
+    address=Web3.to_checksum_address(HACKATHON_VAULT_ADDRESS),
+    abi=HACKATHON_VAULT_ABI
+)
 
-# has_claimed = vault.functions.hasClaimed(AGENT_ID).call()
-# balance = vault.functions.getBalance(AGENT_ID).call()
+has_claimed = vault.functions.hasClaimed(AGENT_ID).call()
+balance = vault.functions.getBalance(AGENT_ID).call()
 
-# print("hasClaimed:", has_claimed)
-# print("balance:", w3.from_wei(balance, "ether"), "ETH")
+print("hasClaimed:", has_claimed)
+print("balance:", w3.from_wei(balance, "ether"), "ETH")
 
 
 # ─── Step 5: Verify RiskRouter nonce ──────────────────────────────────────────
@@ -120,10 +124,10 @@ w3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
 # ─── Step 6: Verify ValidationRegistry ───────────────────────────────────────
 # Confirms your agent has a score slot in the ValidationRegistry
 
-validation = w3.eth.contract(
-    address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS),
-    abi=VALIDATION_REGISTRY_ABI
-)
+# validation = w3.eth.contract(
+#     address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS),
+#     abi=VALIDATION_REGISTRY_ABI
+# )
 
-score = validation.functions.getAverageValidationScore(AGENT_ID).call()
-print("average validation score:", score)
+# score = validation.functions.getAverageValidationScore(AGENT_ID).call()
+# print("average validation score:", score)
