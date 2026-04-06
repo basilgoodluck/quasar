@@ -38,7 +38,7 @@ services:
   trainer:
     image: noblebasil/quasar-trainer:latest
     container_name: quasar-trainer
-    restart: "no"
+    restart: unless-stopped
     build:
       context: .
       dockerfile: trainer/Dockerfile

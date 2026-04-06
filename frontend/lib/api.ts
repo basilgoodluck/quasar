@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK === "true"
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -61,7 +61,7 @@ export const api = {
 
   dashboard: {
     status: () => resolve("status", "/api/dashboard/status"),
-    trades: () => resolve("trades", "/api/dashboard/trades"),
+    trades: () => resolve("trades", "/ws/trade/recent"),
     regime: () => resolve("regime", "/api/dashboard/regime"),
     risk: () => resolve("risk", "/api/dashboard/risk"),
     reputation: () => resolve("reputation", "/api/dashboard/reputation"),

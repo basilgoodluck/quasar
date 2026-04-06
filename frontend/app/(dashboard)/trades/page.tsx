@@ -1,23 +1,22 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import {
   createChart,
-  createSeriesMarkers,
   IChartApi,
   ISeriesApi,
-  ISeriesMarkersPluginApi,
   CandlestickSeries,
   LineSeries,
   UTCTimestamp,
   SeriesMarker,
   Time,
+  createSeriesMarkers,
 } from "lightweight-charts"
-import tradesData from "@/data/trades.json"
+import { api } from "@/lib/api"
 import { Trade } from "@/types"
+import { config } from "@/config"
 
-const trades = tradesData as Trade[]
-const INTERVAL = "1m"
+const INTERVAL = "15m"
 
 type Candle = { time: UTCTimestamp; open: number; high: number; low: number; close: number }
 
@@ -36,20 +35,25 @@ export default function TradesPage() {
   const chartRef = useRef<IChartApi | null>(null)
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null)
-  const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
-  const candleMapRef = useRef<Map<number, Candle>>(new Map())
+  const markersPluginRef = useRef<any>(null)
+  const priceWsRef = useRef<WebSocket | null>(null)
+  const tradeWsRef = useRef<WebSocket | null>(null)
 
-  const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState<number | null>(null)
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT")
-  const [filterDecision, setFilterDecision] = useState("all")
+  const [filterDecision, setFilterDecision] = useState<"all" | "approved" | "rejected" | "skipped">("all")
+  const [liveTrades, setLiveTrades] = useState<Trade[]>([])
 
-  const filteredTrades = filterDecision === "all" ? trades : trades.filter(t => t.decision === filterDecision)
+  const filteredTrades = useMemo(() => {
+    return filterDecision === "all" ? liveTrades : liveTrades.filter(t => t.decision === filterDecision)
+  }, [liveTrades, filterDecision])
+
+  const symbolTrades = useMemo(() => {
+    return filteredTrades.filter(t => t.symbol === selectedSymbol)
+  }, [filteredTrades, selectedSymbol])
 
   const buildMarkers = useCallback((tradeList: Trade[]): SeriesMarker<Time>[] => {
     return tradeList
-      .filter(t => t.symbol === selectedSymbol)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       .map(t => ({
         time: Math.floor(new Date(t.timestamp).getTime() / 1000) as UTCTimestamp,
@@ -58,7 +62,95 @@ export default function TradesPage() {
         shape: t.side === "BUY" ? "arrowUp" : "arrowDown",
         text: `${t.side} ${t.pnl >= 0 ? "+" : ""}${fmt(t.pnl, 0)}`,
         id: t.id,
-      })) as SeriesMarker<Time>[]
+      }))
+  }, [])
+
+  useEffect(() => {
+    api.dashboard.trades()
+      .then(setLiveTrades)
+      .catch(() => {
+        import("@/data/trades.json").then(mod => setLiveTrades(mod.default as Trade[]))
+      })
+  }, [])
+
+  useEffect(() => {
+    const tradeWs = new WebSocket(config.NEXT_PUBLIC_TRADE_WS_URL)
+    tradeWsRef.current = tradeWs
+
+    tradeWs.onmessage = (e) => {
+      const msg = JSON.parse(e.data)
+      if (msg.type === "initial") {
+        setLiveTrades(msg.data)
+      } else if (msg.type === "new_trade") {
+        setLiveTrades(prev => [msg.data, ...prev])
+      }
+    }
+
+    return () => tradeWs.close()
+  }, [])
+
+  const fetchHistoricalData = useCallback(async (symbol: string) => {
+    try {
+      const raw = await api.get<unknown[][]>(
+        `/api/binance-klines?symbol=${symbol}&interval=${INTERVAL}&limit=200`
+      )
+
+      const candles: Candle[] = raw.map(k => ({
+        time: Math.floor(Number(k[0]) / 1000) as UTCTimestamp,
+        open: parseFloat(k[1] as string),
+        high: parseFloat(k[2] as string),
+        low: parseFloat(k[3] as string),
+        close: parseFloat(k[4] as string),
+      }))
+
+      candleSeriesRef.current?.setData(candles)
+      lineSeriesRef.current?.setData(candles.map(c => ({ time: c.time, value: c.close })))
+
+      const last = candles[candles.length - 1]
+      if (last) setLastPrice(last.close)
+
+      if (markersPluginRef.current) {
+        markersPluginRef.current.setMarkers(buildMarkers(symbolTrades))
+      }
+
+      chartRef.current?.timeScale().fitContent()
+    } catch (err) {
+      console.error(err)
+    }
+  }, [buildMarkers, symbolTrades])
+
+  useEffect(() => {
+    if (priceWsRef.current) {
+      priceWsRef.current.close()
+      priceWsRef.current = null
+    }
+
+    const wsUrl = `${config.NEXT_PUBLIC_API_URL.replace(/^http/, "ws")}/ws/binance-stream?symbol=${selectedSymbol.toLowerCase()}&interval=${INTERVAL}`
+    const ws = new WebSocket(wsUrl)
+    priceWsRef.current = ws
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data)
+      const k = msg.k
+      if (!k) return
+
+      const candle: Candle = {
+        time: Math.floor(k.t / 1000) as UTCTimestamp,
+        open: parseFloat(k.o),
+        high: parseFloat(k.h),
+        low: parseFloat(k.l),
+        close: parseFloat(k.c),
+      }
+
+      candleSeriesRef.current?.update(candle)
+      lineSeriesRef.current?.update({ time: candle.time, value: candle.close })
+      setLastPrice(candle.close)
+    }
+
+    return () => {
+      ws.close()
+      priceWsRef.current = null
+    }
   }, [selectedSymbol])
 
   useEffect(() => {
@@ -84,29 +176,14 @@ export default function TradesPage() {
       color: "transparent", lineWidth: 0, priceLineVisible: false, lastValueVisible: false,
     })
 
+    const markersPlugin = createSeriesMarkers(candleSeries)
+
     chartRef.current = chart
     candleSeriesRef.current = candleSeries
     lineSeriesRef.current = lineSeries
+    markersPluginRef.current = markersPlugin
 
-    // v5: create markers plugin instance on the candleSeries
-    markersPluginRef.current = createSeriesMarkers(candleSeries, [])
-
-    fetch(`https://api.binance.com/api/v3/klines?symbol=${selectedSymbol}&interval=${INTERVAL}&limit=120`)
-      .then(r => r.json())
-      .then((raw: unknown[][]) => {
-        const candles: Candle[] = raw.map(k => ({
-          time: Math.floor(Number(k[0]) / 1000) as UTCTimestamp,
-          open: parseFloat(k[1] as string),
-          high: parseFloat(k[2] as string),
-          low: parseFloat(k[3] as string),
-          close: parseFloat(k[4] as string),
-        }))
-        candles.forEach(c => candleMapRef.current.set(c.time as number, c))
-        candleSeries.setData(candles)
-        lineSeries.setData(candles.map(c => ({ time: c.time, value: c.close })))
-        markersPluginRef.current?.setMarkers(buildMarkers(trades))
-        chart.timeScale().fitContent()
-      })
+    fetchHistoricalData(selectedSymbol)
 
     const ro = new ResizeObserver(entries => {
       chart.applyOptions({ width: entries[0].contentRect.width })
@@ -115,41 +192,23 @@ export default function TradesPage() {
 
     return () => {
       ro.disconnect()
-      markersPluginRef.current = null
       chart.remove()
     }
-  }, [selectedSymbol, buildMarkers])
-
-  useEffect(() => {
-    markersPluginRef.current?.setMarkers(buildMarkers(filteredTrades))
-  }, [filteredTrades, buildMarkers])
-
-  useEffect(() => {
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${selectedSymbol.toLowerCase()}@kline_${INTERVAL}`)
-    wsRef.current = ws
-    ws.onopen = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
-    ws.onerror = () => setConnected(false)
-    ws.onmessage = (e) => {
-      const { k } = JSON.parse(e.data)
-      const candle: Candle = {
-        time: Math.floor(k.t / 1000) as UTCTimestamp,
-        open: parseFloat(k.o), high: parseFloat(k.h),
-        low: parseFloat(k.l), close: parseFloat(k.c),
-      }
-      setLastPrice(candle.close)
-      candleMapRef.current.set(candle.time as number, candle)
-      candleSeriesRef.current?.update(candle)
-      lineSeriesRef.current?.update({ time: candle.time, value: candle.close })
-    }
-    return () => ws.close()
   }, [selectedSymbol])
+
+  useEffect(() => {
+    if (markersPluginRef.current) {
+      markersPluginRef.current.setMarkers(buildMarkers(symbolTrades))
+    }
+  }, [symbolTrades, buildMarkers])
 
   const hourlyVolume = Array.from({ length: 24 }, (_, h) => ({
     hour: h,
-    volume: trades.filter(t => t.hour === h).reduce((s, t) => s + t.volume, 0),
+    volume: liveTrades.filter(t => t.hour === h).reduce((s, t) => s + t.volume, 0),
   })).filter(h => h.volume > 0)
-  const maxVol = Math.max(...hourlyVolume.map(h => h.volume))
+
+  const maxVol = hourlyVolume.length ? Math.max(...hourlyVolume.map(h => h.volume)) : 0
+
   const cell: React.CSSProperties = { padding: "6px 10px", whiteSpace: "nowrap" }
 
   return (
@@ -164,12 +223,7 @@ export default function TradesPage() {
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <span style={{
-            fontSize: "11px", fontFamily: "monospace", padding: "3px 10px", borderRadius: "20px",
-            background: connected ? "#14532d" : "#450a0a",
-            color: connected ? "#22c55e" : "#ef4444",
-          }}>{connected ? "live" : "disconnected"}</span>
-          <select value={filterDecision} onChange={e => setFilterDecision(e.target.value)}
+          <select value={filterDecision} onChange={e => setFilterDecision(e.target.value as any)}
             style={{ fontSize: "12px", fontFamily: "monospace", padding: "4px 8px", borderRadius: "6px", border: "0.5px solid #1f1f1f", background: "#111111", color: "#e4e4e7" }}>
             <option value="all">all</option>
             <option value="approved">approved</option>
@@ -191,7 +245,7 @@ export default function TradesPage() {
             }}>{s}</button>
           ))}
         </div>
-        <div ref={chartContainerRef} style={{ width: "100%" }} />
+        <div ref={chartContainerRef} style={{ width: "100%", height: "420px" }} />
         <div style={{ display: "flex", gap: "16px", marginTop: "10px", flexWrap: "wrap" }}>
           {[{ label: "approved", color: "#22c55e" }, { label: "rejected", color: "#ef4444" }, { label: "skipped", color: "#f59e0b" }].map(l => (
             <span key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", fontFamily: "monospace", color: "#71717a" }}>
@@ -219,8 +273,8 @@ export default function TradesPage() {
           <p style={{ fontSize: "11px", fontFamily: "monospace", color: "#52525b", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: ".75rem" }}>decision breakdown</p>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {(["approved", "rejected", "skipped"] as const).map(d => {
-              const count = trades.filter(t => t.decision === d).length
-              const pct = Math.round((count / trades.length) * 100)
+              const count = liveTrades.filter(t => t.decision === d).length
+              const pct = liveTrades.length ? Math.round((count / liveTrades.length) * 100) : 0
               return (
                 <div key={d} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#71717a", width: "56px" }}>{d}</span>

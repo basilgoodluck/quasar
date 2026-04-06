@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-MODEL_DIR  = "/opt/projects/quasar/models"
+MODEL_DIR  = "/app/models"  # MUST match your Docker volume
 INTERVAL   = os.getenv("TRAIN_INTERVAL", "15m")
 WINDOW     = int(os.getenv("TRAIN_WINDOW", "96"))
 EPOCHS     = int(os.getenv("TRAIN_EPOCHS", "50"))
@@ -18,10 +19,10 @@ BATCH_SIZE = int(os.getenv("TRAIN_BATCH_SIZE", "64"))
 LR         = float(os.getenv("TRAIN_LR", "0.001"))
 VAL_SPLIT  = float(os.getenv("TRAIN_VAL_SPLIT", "0.15"))
 DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
+RETRAIN_INTERVAL = int(os.getenv("RETRAIN_INTERVAL_SEC", 3600))  # retrain every hour
 
-LONG_THRESHOLD    = float(os.getenv("LONG_THRESHOLD", "0.015"))
-SHORT_THRESHOLD   = float(os.getenv("SHORT_THRESHOLD", "-0.015"))
-
+LONG_THRESHOLD  = float(os.getenv("LONG_THRESHOLD", "0.015"))
+SHORT_THRESHOLD = float(os.getenv("SHORT_THRESHOLD", "-0.015"))
 
 def get_active_symbols():
     with get_connection() as conn:
@@ -29,13 +30,11 @@ def get_active_symbols():
             cur.execute("SELECT symbol FROM symbols WHERE active = TRUE")
             return [r[0] for r in cur.fetchall()]
 
-
 def _count_real_labels():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM trade_outcomes WHERE status IN ('WIN','LOSS','NEUTRAL')")
             return cur.fetchone()[0]
-
 
 def _log_retrain_event(val_loss: float, real_label_count: int):
     with get_connection() as conn:
@@ -45,7 +44,6 @@ def _log_retrain_event(val_loss: float, real_label_count: int):
                 VALUES (%s, %s, EXTRACT(EPOCH FROM NOW())::BIGINT)
             """, (val_loss, real_label_count))
             conn.commit()
-
 
 def _convert_to_classes(y_continuous: np.ndarray, real_labels: dict, open_times: np.ndarray, window: int) -> np.ndarray:
     y_class = []
@@ -69,11 +67,9 @@ def _convert_to_classes(y_continuous: np.ndarray, real_labels: dict, open_times:
                 y_class.append(2)
     return np.array(y_class, dtype=np.int64)
 
-
 def load_data(symbols):
     all_X, all_y = [], []
     for symbol in symbols:
-        logger.info(f"Building sequences for {symbol}")
         X, y = build_sequences(symbol, interval=INTERVAL, window=WINDOW)
         if X is None:
             logger.warning(f"Not enough data for {symbol}, skipping")
@@ -81,27 +77,23 @@ def load_data(symbols):
         y_class = _convert_to_classes(y, {}, None, WINDOW)
         all_X.append(X)
         all_y.append(y_class)
-        logger.info(f"{symbol}: {len(X)} sequences | long={sum(y_class==0)} short={sum(y_class==1)} neutral={sum(y_class==2)}")
 
     if not all_X:
         raise RuntimeError("No data available for training")
 
     return np.concatenate(all_X), np.concatenate(all_y)
 
-
-def train():
-    logger.info(f"Training on device: {DEVICE}")
+def train_one_model():
     symbols = get_active_symbols()
     logger.info(f"Symbols: {symbols}")
-
     real_count = _count_real_labels()
     logger.info(f"Real outcome labels available: {real_count}")
 
     X, y = load_data(symbols)
     logger.info(f"Total sequences: {len(X)} | Feature dim: {X.shape[2]}")
 
-    X_t = torch.tensor(X)
-    y_t = torch.tensor(y)
+    X_t = torch.tensor(X, dtype=torch.float32)
+    y_t = torch.tensor(y, dtype=torch.long)
 
     dataset    = TensorDataset(X_t, y_t)
     val_size   = int(len(dataset) * VAL_SPLIT)
@@ -149,7 +141,13 @@ def train():
             save_model(model, os.path.join(MODEL_DIR, "regime_lstm.pt"))
 
     _log_retrain_event(best_val_loss, real_count)
-
+    logger.info(f"Retrain finished, best val loss: {best_val_loss}")
 
 if __name__ == "__main__":
-    train()
+    while True:
+        try:
+            train_one_model()
+        except Exception as e:
+            logger.exception(f"Trainer crashed: {e}")
+        logger.info(f"Sleeping {RETRAIN_INTERVAL}s before next retrain")
+        time.sleep(RETRAIN_INTERVAL)
