@@ -1,11 +1,17 @@
 from web3 import Web3
 from config import (
+    AGENT_REGISTRY_ABI,
+    AGENT_REGISTRY_ADDRESS,
+    RISK_ROUTER_ABI,
+    RISK_ROUTER_ADDRESS,
     SEPOLIA_RPC_URL,
     HACKATHON_VAULT_ADDRESS,
     HACKATHON_VAULT_ABI,
     OPERATOR_WALLET_ADDRESS,
     OPERATOR_PRIVATE_KEY,
     AGENT_ID,
+    VALIDATION_REGISTRY_ABI,
+    VALIDATION_REGISTRY_ADDRESS,
 )
 
 w3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
@@ -49,29 +55,29 @@ w3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
 # ─── Step 2: Claim allocation ─────────────────────────────────────────────────
 # Run after saving AGENT_ID to .env
 
-vault = w3.eth.contract(
-    address=Web3.to_checksum_address(HACKATHON_VAULT_ADDRESS),
-    abi=HACKATHON_VAULT_ABI
-)
+# vault = w3.eth.contract(
+#     address=Web3.to_checksum_address(HACKATHON_VAULT_ADDRESS),
+#     abi=HACKATHON_VAULT_ABI
+# )
 
-tx = vault.functions.claimAllocation(AGENT_ID).build_transaction({
-    "from": OPERATOR_WALLET_ADDRESS,
-    "nonce": w3.eth.get_transaction_count(OPERATOR_WALLET_ADDRESS),
-    "gasPrice": w3.eth.gas_price,
-})
+# tx = vault.functions.claimAllocation(AGENT_ID).build_transaction({
+#     "from": OPERATOR_WALLET_ADDRESS,
+#     "nonce": w3.eth.get_transaction_count(OPERATOR_WALLET_ADDRESS),
+#     "gasPrice": w3.eth.gas_price,
+# })
 
-signed = w3.eth.account.sign_transaction(tx, private_key=OPERATOR_PRIVATE_KEY)
-tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+# signed = w3.eth.account.sign_transaction(tx, private_key=OPERATOR_PRIVATE_KEY)
+# tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+# receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
-print("tx hash:", tx_hash.hex())
-print("status:", receipt.status)
+# print("tx hash:", tx_hash.hex())
+# print("status:", receipt.status)
 
-if receipt.status == 1:
-    balance = vault.functions.getBalance(AGENT_ID).call()
-    print("allocated balance:", w3.from_wei(balance, "ether"), "ETH")
-else:
-    print("Transaction reverted")
+# if receipt.status == 1:
+#     balance = vault.functions.getBalance(AGENT_ID).call()
+#     print("allocated balance:", w3.from_wei(balance, "ether"), "ETH")
+# else:
+#     print("Transaction reverted")
 
 
 # ─── Step 3: Verify agent registration ────────────────────────────────────────
@@ -122,10 +128,10 @@ else:
 # ─── Step 6: Verify ValidationRegistry ───────────────────────────────────────
 # Confirms your agent has a score slot in the ValidationRegistry
 
-# validation = w3.eth.contract(
-#     address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS),
-#     abi=VALIDATION_REGISTRY_ABI
-# )
+validation = w3.eth.contract(
+    address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS),
+    abi=VALIDATION_REGISTRY_ABI
+)
 
-# score = validation.functions.getAverageValidationScore(AGENT_ID).call()
-# print("average validation score:", score)
+score = validation.functions.getAverageValidationScore(AGENT_ID).call()
+print("average validation score:", score)
