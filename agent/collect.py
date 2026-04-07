@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 BINANCE_BASE    = "https://fapi.binance.com"
 BINANCE_WS_BASE = "wss://fstream.binance.com/ws"
 LOOP_SLEEP      = int(os.getenv("COLLECT_LOOP_SLEEP", "60"))
-BACKFILL_DAYS   = int(os.getenv("BACKFILL_DAYS", "730"))
+BACKFILL_DAYS   = 1
 KLINE_LIMIT     = 1500
 AGG_TRADE_BATCH = int(os.getenv("AGG_TRADE_BATCH", "100"))
 

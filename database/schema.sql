@@ -247,15 +247,15 @@ CREATE TABLE symbols (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     symbol TEXT UNIQUE NOT NULL,
     active BOOLEAN DEFAULT TRUE,
-    intervals TEXT[] NOT NULL DEFAULT '{15m,1h}',
+    intervals TEXT[] NOT NULL DEFAULT '{5m,30m}',
     asset_class TEXT NOT NULL DEFAULT 'crypto',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 INSERT INTO symbols (symbol, active, intervals, asset_class) VALUES
-    ('BTCUSDT', TRUE, '{15m,1h}', 'crypto'),
-    ('ETHUSDT', TRUE, '{15m,1h}', 'crypto'),
-    ('SOLUSDT', TRUE, '{15m,1h}', 'crypto');
+    ('BTCUSDT', TRUE, '{5m,30m}', 'crypto'),
+    ('ETHUSDT', TRUE, '{5m,30m}', 'crypto'),
+    ('SOLUSDT', TRUE, '{5m,30m}', 'crypto');
 
 CREATE TABLE agents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
