@@ -10,7 +10,6 @@ logger = get_logger(__name__)
 MODEL_PATH = os.getenv("MODEL_PATH", "models/regime_lstm.pt")
 DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Confidence thresholds — how certain the model must be to declare a regime
 TRENDING_THRESHOLD = float(os.getenv("TRENDING_THRESHOLD", "0.45"))
 VOLATILE_THRESHOLD = float(os.getenv("VOLATILE_THRESHOLD", "0.40"))
 
@@ -32,13 +31,13 @@ def detect_regime(symbol: str, reputation: float = 0.0) -> dict:
     if seq is None:
         logger.warning(f"[{symbol}] not enough data for regime inference")
         return {
-            "symbol":      symbol,
-            "p_trending":  0.0,
-            "p_ranging":   1.0,
-            "p_volatile":  0.0,
-            "regime":      "ranging",
-            "confidence":  0.0,
-            "ready":       False,
+            "symbol":     symbol,
+            "p_trending": 0.0,
+            "p_ranging":  1.0,
+            "p_volatile": 0.0,
+            "regime":     "ranging",
+            "confidence": 0.0,
+            "ready":      False,
         }
 
     input_size = seq.shape[2]
@@ -46,29 +45,25 @@ def detect_regime(symbol: str, reputation: float = 0.0) -> dict:
 
     with torch.no_grad():
         x     = torch.tensor(seq).to(DEVICE)
-        probs = model(x).squeeze(0).cpu().tolist()  # [p_trending, p_ranging, p_volatile]
+        probs = torch.softmax(model(x), dim=-1).squeeze(0).cpu().tolist()
 
     p_trending, p_ranging, p_volatile = probs
 
-    # Reputation boosts confidence threshold slightly — higher rep = easier to trigger a trade
     boost              = reputation * REPUTATION_CONFIDENCE_BOOST
     trending_threshold = max(0.35, TRENDING_THRESHOLD - boost)
     volatile_threshold = max(0.30, VOLATILE_THRESHOLD - boost)
 
-    # Determine regime
     if p_trending >= trending_threshold and p_trending >= p_ranging:
         if p_volatile >= volatile_threshold:
-            regime     = "trending_volatile"  # best condition — strong move with energy
+            regime    = "trending_volatile"
         else:
-            regime     = "trending"            # clean trend
+            regime    = "trending"
         confidence = round(p_trending, 4)
-
     elif p_volatile >= volatile_threshold and p_trending < trending_threshold:
-        regime     = "volatile"               # explosive but no clear direction — caution
+        regime     = "volatile"
         confidence = round(p_volatile, 4)
-
     else:
-        regime     = "ranging"                # choppy, stay out
+        regime     = "ranging"
         confidence = round(p_ranging, 4)
 
     logger.info(

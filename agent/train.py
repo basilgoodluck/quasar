@@ -3,7 +3,7 @@ import time
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset, random_split
+from torch.utils.data import DataLoader, TensorDataset
 from database.connection import get_connection
 from agent.features import build_sequences, INTERVAL, WINDOW
 from agent.model import get_model, save_model
@@ -17,7 +17,8 @@ BATCH_SIZE       = int(os.getenv("TRAIN_BATCH_SIZE", "64"))
 LR               = float(os.getenv("TRAIN_LR", "0.001"))
 VAL_SPLIT        = float(os.getenv("TRAIN_VAL_SPLIT", "0.15"))
 DEVICE           = "cuda" if torch.cuda.is_available() else "cpu"
-RETRAIN_INTERVAL = int(os.getenv("RETRAIN_INTERVAL_SEC", "3600"))  # every hour
+RETRAIN_INTERVAL = int(os.getenv("RETRAIN_INTERVAL_SEC", "3600"))
+PATIENCE         = int(os.getenv("TRAIN_PATIENCE", "10"))
 
 
 def get_active_symbols():
@@ -46,14 +47,30 @@ def _log_retrain_event(val_loss: float, real_label_count: int):
 
 def load_data(symbols):
     all_X, all_y = [], []
+    num_symbols  = len(symbols)
 
-    for symbol in symbols:
+    for sid, symbol in enumerate(symbols):
         X, y = build_sequences(symbol, interval=INTERVAL, window=WINDOW)
+
         if X is None or len(X) == 0:
             logger.warning(f"[{symbol}] not enough data, skipping")
             continue
+
+        mean = X.mean(axis=(0, 1), keepdims=True)
+        std  = X.std(axis=(0, 1), keepdims=True)
+        X    = (X - mean) / (std + 1e-8)
+
+        os.makedirs(MODEL_DIR, exist_ok=True)
+        np.save(os.path.join(MODEL_DIR, f"scaler_{symbol}.npy"),
+                np.array([mean.squeeze(), std.squeeze()]))
+
+        one_hot         = np.zeros((X.shape[0], X.shape[1], num_symbols), dtype=np.float32)
+        one_hot[:, :, sid] = 1.0
+        X               = np.concatenate([X, one_hot], axis=2)
+
         all_X.append(X)
         all_y.append(y)
+
         logger.info(f"[{symbol}] sequences={len(X)} feature_dim={X.shape[2]}")
 
     if not all_X:
@@ -62,7 +79,6 @@ def load_data(symbols):
     X_all = np.concatenate(all_X)
     y_all = np.concatenate(all_y)
 
-    # Log class distribution so we can see if labels are balanced
     unique, counts = np.unique(y_all, return_counts=True)
     class_names    = ["trending", "ranging", "volatile"]
     for u, c in zip(unique, counts):
@@ -72,17 +88,17 @@ def load_data(symbols):
 
 
 def _compute_class_weights(y: np.ndarray, num_classes: int = 3) -> torch.Tensor:
-    """Inverse frequency weighting so minority classes aren't ignored."""
     counts  = np.bincount(y, minlength=num_classes).astype(np.float32)
-    counts  = np.where(counts == 0, 1.0, counts)  # avoid divide by zero
+    counts  = np.where(counts == 0, 1.0, counts)
     weights = 1.0 / counts
-    weights = weights / weights.sum() * num_classes  # normalize
+    weights = weights / weights.sum() * num_classes
     return torch.tensor(weights, dtype=torch.float32).to(DEVICE)
 
 
 def train_one_model():
     symbols    = get_active_symbols()
     real_count = _count_real_labels()
+
     logger.info(f"Symbols: {symbols} | Real outcome labels: {real_count} | Interval: {INTERVAL} | Window: {WINDOW}")
 
     X, y = load_data(symbols)
@@ -91,32 +107,33 @@ def train_one_model():
     X_t = torch.tensor(X, dtype=torch.float32)
     y_t = torch.tensor(y, dtype=torch.long)
 
-    dataset    = TensorDataset(X_t, y_t)
-    val_size   = max(1, int(len(dataset) * VAL_SPLIT))
-    train_size = len(dataset) - val_size
-    train_ds, val_ds = random_split(dataset, [train_size, val_size])
+    split_idx = int(len(X_t) * (1 - VAL_SPLIT))
+    train_ds  = TensorDataset(X_t[:split_idx], y_t[:split_idx])
+    val_ds    = TensorDataset(X_t[split_idx:], y_t[split_idx:])
 
-    train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  drop_last=False)
+    train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  drop_last=True)
     val_dl   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
 
-    input_size    = X.shape[2]
-    model         = get_model(input_size, DEVICE)
+    input_size = X.shape[2]
+    model      = get_model(input_size, DEVICE)
+
     optimizer     = torch.optim.Adam(model.parameters(), lr=LR)
     class_weights = _compute_class_weights(y)
     criterion     = nn.CrossEntropyLoss(weight=class_weights)
     scheduler     = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
 
-    best_val_loss = float("inf")
-    model_path    = os.path.join(MODEL_DIR, "regime_lstm.pt")
+    best_val_loss    = float("inf")
+    patience_counter = 0
+    model_path       = os.path.join(MODEL_DIR, "regime_lstm.pt")
 
     for epoch in range(1, EPOCHS + 1):
         model.train()
         train_loss = 0.0
+
         for xb, yb in train_dl:
             xb, yb = xb.to(DEVICE), yb.to(DEVICE)
             optimizer.zero_grad()
-            pred = model(xb)
-            loss = criterion(pred, yb)
+            loss = criterion(model(xb), yb)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -124,6 +141,7 @@ def train_one_model():
 
         model.eval()
         val_loss = 0.0
+
         with torch.no_grad():
             for xb, yb in val_dl:
                 xb, yb = xb.to(DEVICE), yb.to(DEVICE)
@@ -131,15 +149,22 @@ def train_one_model():
 
         train_loss /= max(len(train_dl), 1)
         val_loss   /= max(len(val_dl), 1)
+
         scheduler.step(val_loss)
 
         if epoch % 10 == 0:
             logger.info(f"  epoch {epoch}/{EPOCHS} train={train_loss:.4f} val={val_loss:.4f}")
 
         if val_loss < best_val_loss:
-            best_val_loss = val_loss
+            best_val_loss    = val_loss
+            patience_counter = 0
             os.makedirs(MODEL_DIR, exist_ok=True)
             save_model(model, model_path)
+        else:
+            patience_counter += 1
+            if patience_counter >= PATIENCE:
+                logger.info(f"Early stopping at epoch {epoch} | best val loss: {best_val_loss:.4f}")
+                break
 
     _log_retrain_event(best_val_loss, real_count)
     logger.info(f"Retrain finished | best val loss: {best_val_loss:.4f} | model saved to {model_path}")
