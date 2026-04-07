@@ -26,7 +26,7 @@ def test_regime_direction_from_confidence(mock_feat_conn, mock_rep_conn):
     fake_seq = np.zeros((1, 96, 11), dtype="float32")
 
     mock_model = MagicMock()
-    mock_model.return_value = torch.tensor([[0.75, 0.15, 0.10]])
+    mock_model.return_value = torch.tensor([[-0.2877, -1.8971, -2.3026]])
 
     with patch("agent.regime.build_live_sequence", return_value=fake_seq), \
          patch("agent.regime._get_model", return_value=mock_model):
