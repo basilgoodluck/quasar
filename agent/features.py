@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 from database.connection import get_connection
 
+INTERVAL = "5m"
+WINDOW   = 24  # 2 hours of 5m candles
+
 
 def _fetch_ohlcv(symbol, interval, limit):
     with get_connection() as conn:
@@ -70,16 +73,43 @@ def _fetch_oi(symbol, period, limit):
     return df.sort_values("timestamp").reset_index(drop=True).astype({"open_interest": float})
 
 
-def _fetch_liquidations(symbol, limit):
+def _fetch_liquidations_timeseries(symbol, limit):
+    """Fetch liquidations with timestamps for per-candle alignment."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT side, quantity
+                SELECT side, quantity, trade_time
                 FROM liquidations
                 WHERE symbol = %s
                 ORDER BY trade_time DESC LIMIT %s
             """, (symbol, limit))
-            return cur.fetchall()
+            rows = cur.fetchall()
+    if not rows:
+        return None
+    df = pd.DataFrame(rows, columns=["side", "quantity", "trade_time"])
+    df["quantity"] = df["quantity"].astype(float)
+    df["trade_time"] = df["trade_time"].astype(int)
+    return df.sort_values("trade_time").reset_index(drop=True)
+
+
+def _fetch_agg_trades_timeseries(symbol, limit):
+    """Fetch agg trades for large trade ratio and buy/sell aggression."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT price, quantity, is_buyer_mm, trade_time
+                FROM agg_trades
+                WHERE symbol = %s
+                ORDER BY trade_time DESC LIMIT %s
+            """, (symbol, limit))
+            rows = cur.fetchall()
+    if not rows:
+        return None
+    df = pd.DataFrame(rows, columns=["price", "quantity", "is_buyer_mm", "trade_time"])
+    df["price"]      = df["price"].astype(float)
+    df["quantity"]   = df["quantity"].astype(float)
+    df["trade_time"] = df["trade_time"].astype(int)
+    return df.sort_values("trade_time").reset_index(drop=True)
 
 
 def _fetch_real_labels(symbol: str) -> dict:
@@ -93,60 +123,153 @@ def _fetch_real_labels(symbol: str) -> dict:
             rows = cur.fetchall()
     mapping = {}
     for created_at, status in rows:
-        label = 1.0 if status == "WIN" else (0.0 if status == "LOSS" else 0.5)
+        # WIN = trending trade that worked, LOSS = ranging/wrong regime, NEUTRAL = volatile/unclear
+        label = 0 if status == "WIN" else (1 if status == "LOSS" else 2)
         mapping[int(created_at)] = label
     return mapping
 
 
-def _compute_features(df, cvd_df, funding_df, oi_df, liq_rows):
+def _align_funding_to_candles(df: pd.DataFrame, funding_df: pd.DataFrame) -> np.ndarray:
+    """For each candle, find the most recent funding rate at or before that candle's open_time."""
+    if funding_df is None or len(funding_df) == 0:
+        return np.zeros(len(df), dtype=np.float32)
+
+    funding_times = funding_df["funding_time"].values
+    funding_rates = funding_df["funding_rate"].values
+    result = np.zeros(len(df), dtype=np.float32)
+
+    for i, ot in enumerate(df["open_time"].values):
+        idx = np.searchsorted(funding_times, ot, side="right") - 1
+        if idx >= 0:
+            result[i] = float(np.clip(funding_rates[idx] / 0.005, -1.0, 1.0))
+
+    return result
+
+
+def _align_oi_to_candles(df: pd.DataFrame, oi_df: pd.DataFrame) -> np.ndarray:
+    """For each candle, compute OI change using the closest OI snapshot."""
+    if oi_df is None or len(oi_df) < 5:
+        return np.zeros(len(df), dtype=np.float32)
+
+    oi_times  = oi_df["timestamp"].values
+    oi_values = oi_df["open_interest"].values
+    result    = np.zeros(len(df), dtype=np.float32)
+
+    for i, ot in enumerate(df["open_time"].values):
+        idx = np.searchsorted(oi_times, ot, side="right") - 1
+        if idx >= 4:
+            change = (oi_values[idx] - oi_values[idx - 4]) / (oi_values[idx - 4] + 1e-9)
+            result[i] = float(np.clip(change, -1.0, 1.0))
+
+    return result
+
+
+def _align_liquidations_to_candles(df: pd.DataFrame, liq_df: pd.DataFrame, candle_ms: int = 300000) -> tuple:
+    """For each candle window, sum long and short liquidations."""
+    long_liq_arr  = np.zeros(len(df), dtype=np.float32)
+    short_liq_arr = np.zeros(len(df), dtype=np.float32)
+
+    if liq_df is None or len(liq_df) == 0:
+        return long_liq_arr, short_liq_arr
+
+    for i, ot in enumerate(df["open_time"].values):
+        window_start = ot
+        window_end   = ot + candle_ms
+        mask         = (liq_df["trade_time"] >= window_start) & (liq_df["trade_time"] < window_end)
+        candle_liqs  = liq_df[mask]
+
+        if len(candle_liqs) == 0:
+            continue
+
+        long_liq  = candle_liqs[candle_liqs["side"] == "SELL"]["quantity"].sum()
+        short_liq = candle_liqs[candle_liqs["side"] == "BUY"]["quantity"].sum()
+        total     = long_liq + short_liq + 1e-9
+
+        long_liq_arr[i]  = long_liq / total
+        short_liq_arr[i] = short_liq / total
+
+    return long_liq_arr, short_liq_arr
+
+
+def _align_agg_trades_to_candles(df: pd.DataFrame, agg_df: pd.DataFrame, candle_ms: int = 300000) -> tuple:
+    """For each candle, compute large trade ratio and buy aggression from agg trades."""
+    large_trade_ratio_arr = np.zeros(len(df), dtype=np.float32)
+    buy_aggression_arr    = np.zeros(len(df), dtype=np.float32)
+
+    if agg_df is None or len(agg_df) == 0:
+        return large_trade_ratio_arr, buy_aggression_arr
+
+    # Define large trade as top 20% by quantity in the whole dataset
+    large_threshold = agg_df["quantity"].quantile(0.80)
+
+    for i, ot in enumerate(df["open_time"].values):
+        window_start = ot
+        window_end   = ot + candle_ms
+        mask         = (agg_df["trade_time"] >= window_start) & (agg_df["trade_time"] < window_end)
+        candle_trades = agg_df[mask]
+
+        if len(candle_trades) == 0:
+            continue
+
+        total_vol = candle_trades["quantity"].sum() + 1e-9
+        large_vol = candle_trades[candle_trades["quantity"] >= large_threshold]["quantity"].sum()
+
+        # is_buyer_mm=True means the buyer is market maker = sell aggression
+        # is_buyer_mm=False means buyer is aggressor = buy aggression
+        buy_agg_vol  = candle_trades[~candle_trades["is_buyer_mm"]]["quantity"].sum()
+
+        large_trade_ratio_arr[i] = large_vol / total_vol
+        buy_aggression_arr[i]    = buy_agg_vol / total_vol
+
+    return large_trade_ratio_arr, buy_aggression_arr
+
+
+def _compute_features(df, cvd_df, funding_df, oi_df, liq_df, agg_df):
+    """Build per-candle aligned feature matrix."""
+    n        = len(df)
     features = pd.DataFrame(index=df.index)
 
-    # price action
+    # --- Price action ---
     features["log_return"] = np.log(df["close"] / df["close"].shift(1))
     features["hl_range"]   = (df["high"] - df["low"]) / df["close"]
-    features["vol_ratio"]  = df["volume"] / df["volume"].rolling(20).mean()
+    features["vol_ratio"]  = df["volume"] / (df["volume"].rolling(20, min_periods=1).mean() + 1e-9)
     features["buy_ratio"]  = df["taker_buy_volume"] / (df["volume"] + 1e-9)
 
-    # realized volatility
-    features["realized_vol"] = features["log_return"].rolling(20).std() * np.sqrt(365 * 24 * 4)
+    # Realized volatility over 12 candles (1 hour at 5m)
+    features["realized_vol"] = features["log_return"].rolling(12, min_periods=1).std() * np.sqrt(365 * 24 * 12)
 
-    # CVD and delta
-    if cvd_df is not None and len(cvd_df) >= len(df):
-        cvd_aligned   = cvd_df["cvd"].values[-len(df):]
-        delta_aligned = cvd_df["delta"].values[-len(df):]
-        features["cvd_norm"]   = pd.Series(cvd_aligned).pct_change().fillna(0).values
-        features["delta_norm"] = pd.Series(delta_aligned) / (df["volume"] + 1e-9)
+    # --- CVD aligned per candle ---
+    if cvd_df is not None and len(cvd_df) >= n:
+        cvd_s   = pd.Series(cvd_df["cvd"].values[-n:])
+        delta_s = pd.Series(cvd_df["delta"].values[-n:])
+
+        features["cvd_norm"]   = cvd_s.pct_change().fillna(0).values
+        features["delta_norm"] = (delta_s / (df["volume"].values + 1e-9))
+
+        # CVD acceleration: rate of change of CVD change — is momentum building or fading?
+        features["cvd_accel"] = cvd_s.pct_change().diff().fillna(0).values
     else:
-        features["cvd_norm"]   = 0.0
+        features["cvd_norm"]  = 0.0
         features["delta_norm"] = 0.0
+        features["cvd_accel"] = 0.0
 
-    # funding rate — directionally meaningful: positive = overleveraged long, negative = overleveraged short
-    if funding_df is not None and len(funding_df) > 0:
-        avg_funding = funding_df["funding_rate"].rolling(8, min_periods=1).mean().iloc[-1]
-        features["funding"] = float(np.clip(avg_funding / 0.005, -1.0, 1.0))
-    else:
-        features["funding"] = 0.0
+    # --- Funding rate per candle (forward-filled from last known) ---
+    features["funding"] = _align_funding_to_candles(df, funding_df)
 
-    # OI change — rising = new participation, falling = unwinding
-    if oi_df is not None and len(oi_df) > 4:
-        oi_vals   = oi_df["open_interest"].values
-        oi_change = (oi_vals[-1] - oi_vals[-5]) / (oi_vals[-5] + 1e-9)
-        features["oi_change"] = float(np.clip(oi_change, -1.0, 1.0))
-    else:
-        features["oi_change"] = 0.0
+    # --- OI change per candle ---
+    features["oi_change"] = _align_oi_to_candles(df, oi_df)
 
-    # liquidations — long_liq = forced selling (potential bottom), short_liq = forced buying (potential top)
-    if liq_rows:
-        long_liq  = sum(float(q) for s, q in liq_rows if s == "SELL")
-        short_liq = sum(float(q) for s, q in liq_rows if s == "BUY")
-        total     = long_liq + short_liq + 1e-9
-        features["long_liq_ratio"]  = long_liq / total
-        features["short_liq_ratio"] = short_liq / total
-    else:
-        features["long_liq_ratio"]  = 0.0
-        features["short_liq_ratio"] = 0.0
+    # --- Liquidations per candle ---
+    long_liq, short_liq = _align_liquidations_to_candles(df, liq_df)
+    features["long_liq_ratio"]  = long_liq
+    features["short_liq_ratio"] = short_liq
 
-    return features.dropna()
+    # --- Agg trades per candle ---
+    large_trade_ratio, buy_aggression = _align_agg_trades_to_candles(df, agg_df)
+    features["large_trade_ratio"] = large_trade_ratio
+    features["buy_aggression"]    = buy_aggression
+
+    return features.fillna(0.0)
 
 
 def _normalize(features: pd.DataFrame) -> np.ndarray:
@@ -156,49 +279,69 @@ def _normalize(features: pd.DataFrame) -> np.ndarray:
     return (arr - mean) / std
 
 
-def build_sequences(symbol, interval="15m", window=96, limit=5000):
+def build_sequences(symbol, interval=INTERVAL, window=WINDOW, limit=1000):
     df       = _fetch_ohlcv(symbol, interval, limit)
     cvd_df   = _fetch_cvd(symbol, interval, limit)
-    fund_df  = _fetch_funding(symbol, limit=500)
-    oi_df    = _fetch_oi(symbol, interval, limit)
-    liq_rows = _fetch_liquidations(symbol, limit=200)
+    fund_df  = _fetch_funding(symbol, limit=200)
+    oi_df    = _fetch_oi(symbol, interval, limit=200)
+    liq_df   = _fetch_liquidations_timeseries(symbol, limit=2000)
+    agg_df   = _fetch_agg_trades_timeseries(symbol, limit=10000)
 
     if df is None or len(df) < window + 10:
         return None, None
 
-    features    = _compute_features(df, cvd_df, fund_df, oi_df, liq_rows)
+    features    = _compute_features(df, cvd_df, fund_df, oi_df, liq_df, agg_df)
     normed      = _normalize(features)
     real_labels = _fetch_real_labels(symbol)
-    closes      = df["close"].values[-len(features):]
-    open_times  = df["open_time"].values[-len(features):]
+    closes      = df["close"].values
+    open_times  = df["open_time"].values
 
     X, y = [], []
-    for i in range(window, len(normed)):
+    fwd_window = 8  # look 8 candles forward = 40 minutes at 5m
+
+    for i in range(window, len(normed) - fwd_window):
         X.append(normed[i - window:i])
         ts = int(open_times[i])
 
         if ts in real_labels:
-            label = real_labels[ts]
+            y.append(real_labels[ts])
+            continue
+
+        # Regime label from forward price action
+        fwd_closes  = closes[i:i + fwd_window]
+        fwd_returns = np.diff(fwd_closes) / (fwd_closes[:-1] + 1e-9)
+        fwd_total   = (fwd_closes[-1] - fwd_closes[0]) / (fwd_closes[0] + 1e-9)
+        fwd_std     = float(np.std(fwd_returns))
+        fwd_abs     = float(abs(fwd_total))
+
+        # Trending: price moved meaningfully and sustained direction
+        # Ranging: price went nowhere or reversed repeatedly
+        # Volatile: large moves but no clear direction (high std, low net)
+        if fwd_abs > 0.003 and fwd_std < fwd_abs * 2:
+            label = 0  # trending
+        elif fwd_std > 0.002 and fwd_abs < 0.002:
+            label = 2  # volatile — big moves, no net direction
         else:
-            fwd_return = (closes[i] - closes[i - 1]) / (closes[i - 1] + 1e-9)
-            label      = float(np.clip((fwd_return + 0.05) / 0.1, 0.0, 1.0))
+            label = 1  # ranging — low movement, choppy
 
         y.append(label)
 
-    return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
+    return np.array(X, dtype=np.float32), np.array(y, dtype=np.int64)
 
 
-def build_live_sequence(symbol, interval="15m", window=96):
-    df       = _fetch_ohlcv(symbol, interval, window + 60)
-    cvd_df   = _fetch_cvd(symbol, interval, window + 60)
-    fund_df  = _fetch_funding(symbol, limit=100)
-    oi_df    = _fetch_oi(symbol, interval, limit=50)
-    liq_rows = _fetch_liquidations(symbol, limit=50)
+def build_live_sequence(symbol, interval=INTERVAL, window=WINDOW):
+    fetch_limit = window + 50
+    df      = _fetch_ohlcv(symbol, interval, fetch_limit)
+    cvd_df  = _fetch_cvd(symbol, interval, fetch_limit)
+    fund_df = _fetch_funding(symbol, limit=50)
+    oi_df   = _fetch_oi(symbol, interval, limit=50)
+    liq_df  = _fetch_liquidations_timeseries(symbol, limit=500)
+    agg_df  = _fetch_agg_trades_timeseries(symbol, limit=2000)
 
     if df is None or len(df) < window:
         return None
 
-    features = _compute_features(df, cvd_df, fund_df, oi_df, liq_rows)
+    features = _compute_features(df, cvd_df, fund_df, oi_df, liq_df, agg_df)
     if len(features) < window:
         return None
 

@@ -3,6 +3,10 @@ import torch
 import torch.nn as nn
 
 
+# Regime classes
+REGIMES = ["trending", "ranging", "volatile"]
+
+
 class RegimeLSTM(nn.Module):
     def __init__(self, input_size, hidden_size=128, num_layers=2, dropout=0.3):
         super().__init__()
@@ -18,13 +22,13 @@ class RegimeLSTM(nn.Module):
             nn.Linear(hidden_size, 64),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(64, 3),  # long, short, neutral
+            nn.Linear(64, 3),  # trending, ranging, volatile
         )
 
     def forward(self, x):
         out, _ = self.lstm(x)
         out = self.dropout(out[:, -1, :])
-        return torch.softmax(self.head(out), dim=-1)  # returns [p_long, p_short, p_neutral]
+        return torch.softmax(self.head(out), dim=-1)  # [p_trending, p_ranging, p_volatile]
 
 
 def get_model(input_size, device="cpu"):

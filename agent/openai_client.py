@@ -17,17 +17,26 @@ _SYSTEM = """You are a trade sizing optimizer for a crypto futures trading agent
 You receive a market regime snapshot, a reputation score, and hard limits.
 The reputation score is between 0 and 1. It reflects the agent's verified on-chain win rate and decision consistency.
 
+Regime types:
+- trending: clean directional move — good conditions, trade with normal sizing
+- trending_volatile: strong move with high energy — best conditions, can push sizing
+- volatile: explosive but no clear direction — only trade with tight sizing if confidence is high
+- ranging: choppy, no edge — you should never receive this, but if so return SKIP
+
 Sizing rules:
 - reputation >= 0.7 → you may use up to 100% of the leverage and risk limits
 - reputation 0.4–0.7 → use 50–80% of the limits
 - reputation < 0.4 → stay close to the minimum limits regardless of confidence
-- High confidence + low volatility → push toward upper bound of your allowed range
-- Low confidence + high volatility → stay at lower bound
-- Strong trend → RR toward upper bound
-- Weak trend → RR toward lower bound
-- neutral direction → action must be SKIP
+- trending_volatile + high confidence → push toward upper bound
+- volatile only → stay at lower bound regardless of confidence
+- trending + low confidence → mid range
+- RR toward upper bound when regime is strong, lower bound when uncertain
 
-Also write a 2-3 sentence plain English explanation referencing the market data and reputation level.
+You must decide the trade direction based on regime context:
+- If regime is trending or trending_volatile, pick LONG or SHORT based on the confidence and context
+- If regime is volatile with low confidence, return SKIP
+
+Also write a 2-3 sentence plain English explanation referencing the regime and reputation level.
 
 Respond ONLY with valid JSON, no markdown, no extra text:
 {"action": "LONG"|"SHORT"|"SKIP", "leverage": float, "risk_pct": float, "rr_ratio": float, "explanation": "string"}"""
@@ -43,21 +52,23 @@ def _clamp(value: float, key: str) -> float:
 
 
 def get_trade_params(regime: dict, reputation: float = 0.0) -> dict:
-    if regime.get("direction", "neutral") == "neutral":
+    current_regime = regime.get("regime", "ranging")
+
+    if current_regime == "ranging":
         return {
             "action":      "SKIP",
             "leverage":    MIN_LEVERAGE,
             "risk_pct":    MIN_RISK_PCT,
             "rr_ratio":    MIN_RR,
-            "explanation": "Regime direction is neutral. No trade taken.",
+            "explanation": "Regime is ranging. No trade taken.",
         }
 
     prompt = (
+        f"regime={current_regime} "
         f"confidence={regime['confidence']} "
-        f"volatility_regime={regime['volatility_regime']} "
-        f"activity_score={regime['activity_score']} "
-        f"trend_strength={regime['trend_strength']} "
-        f"direction={regime['direction']} "
+        f"p_trending={regime['p_trending']} "
+        f"p_ranging={regime['p_ranging']} "
+        f"p_volatile={regime['p_volatile']} "
         f"reputation={reputation}\n"
         f"limits: leverage {MIN_LEVERAGE}–{MAX_LEVERAGE}x "
         f"risk {MIN_RISK_PCT}–{MAX_RISK_PCT}% "
