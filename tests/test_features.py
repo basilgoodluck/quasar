@@ -93,7 +93,10 @@ def test_no_nan_in_normalized_output(mock_conn):
 def test_liquidation_ratios_sum_to_one(mock_conn):
     from agent.features import _compute_features
     df      = _make_ohlcv(200)
-    liq_rows = [("SELL", 10.0), ("BUY", 5.0), ("SELL", 3.0)]
+    liq_rows = pd.DataFrame(
+        [("SELL", 10.0, 0), ("BUY", 5.0, 0), ("SELL", 3.0, 0)],
+        columns=["side", "quantity", "trade_time"],
+    )
     result  = _compute_features(df, None, None, None, liq_rows, None)
     last    = result.iloc[-1]
     total   = last["long_liq_ratio"] + last["short_liq_ratio"]
