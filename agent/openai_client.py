@@ -1,4 +1,5 @@
 import json
+import re
 from openai import OpenAI
 from config import OPENAI_API_KEY, OPENAI_MODEL, MAX_LEVERAGE, MIN_LEVERAGE, MAX_RISK_PCT, MIN_RISK_PCT, MIN_RR, MAX_RR
 from logger import get_logger
@@ -83,10 +84,23 @@ def get_trade_params(regime: dict, reputation: float = 0.0) -> dict:
                 {"role": "user",   "content": prompt},
             ],
             temperature=0.2,
-            max_tokens=300,
+            max_tokens=600,
+            response_format={"type": "json_object"},
         )
 
-        data   = json.loads(response.choices[0].message.content.strip())
+        choice = response.choices[0]
+        raw    = choice.message.content.strip()
+
+        if not raw:
+            raise ValueError(f"Empty response from OpenAI (finish_reason={choice.finish_reason})")
+
+        if choice.finish_reason == "length":
+            raise ValueError("Response truncated by max_tokens")
+
+        raw  = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw  = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+
         action = data.get("action", "SKIP").upper()
         if action not in ("LONG", "SHORT", "SKIP"):
             action = "SKIP"
