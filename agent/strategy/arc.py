@@ -101,7 +101,7 @@ class ARCStrategy(BaseStrategy):
         # Ranging — always skip, market is choppy
         if current_regime == "ranging":
             return self.skip(
-                symbol, f"regime=ranging — choppy market, no edge",
+                symbol, "regime=ranging — choppy market, no edge",
                 confidence=confidence, post_on_chain=True,
             )
 
