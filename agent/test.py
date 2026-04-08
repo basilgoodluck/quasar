@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import subprocess
 import json
-import os
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -133,25 +132,42 @@ def detect_regime(df, funding_df, oi_df) -> dict:
 
     scores = {"trending": 0, "ranging": 0, "volatile": 0}
 
-    if abs(oi_trending) > 0.02:                              scores["trending"] += 2
-    if funding_flip <= 2:                                    scores["trending"] += 1
-    if abs(funding_mean) > 0.3:                              scores["trending"] += 1
-    if abs(liq_one_side) > 0.2:                              scores["trending"] += 2
-    if abs(delta_trend) > 0.05:                              scores["trending"] += 2
-    if abs(fwd_total) > 0.005:                               scores["trending"] += 1
+    if abs(oi_trending) > 0.02:
+        scores["trending"] += 2
+    if funding_flip <= 2:
+        scores["trending"] += 1
+    if abs(funding_mean) > 0.3:
+        scores["trending"] += 1
+    if abs(liq_one_side) > 0.2:
+        scores["trending"] += 2
+    if abs(delta_trend) > 0.05:
+        scores["trending"] += 2
+    if abs(fwd_total) > 0.005:
+        scores["trending"] += 1
 
-    if oi_volatile > 0.05:                                   scores["volatile"] += 2
-    if liq_both > 0.4:                                       scores["volatile"] += 2
-    if cvd_chaos > 0.5:                                      scores["volatile"] += 2
-    if rvol > 2.0:                                           scores["volatile"] += 1
-    if funding_flip >= 4:                                    scores["volatile"] += 1
+    if oi_volatile > 0.05:
+        scores["volatile"] += 2
+    if liq_both > 0.4:
+        scores["volatile"] += 2
+    if cvd_chaos > 0.5:
+        scores["volatile"] += 2
+    if rvol > 2.0:
+        scores["volatile"] += 1
+    if funding_flip >= 4:
+        scores["volatile"] += 1
 
-    if abs(oi_trending) < 0.01:                              scores["ranging"] += 2
-    if funding_flip >= 3:                                    scores["ranging"] += 1
-    if abs(funding_mean) < 0.15:                             scores["ranging"] += 1
-    if liq_both < 0.2 and abs(liq_one_side) < 0.1:          scores["ranging"] += 2
-    if abs(delta_trend) < 0.02:                              scores["ranging"] += 2
-    if abs(fwd_total) < 0.002:                               scores["ranging"] += 1
+    if abs(oi_trending) < 0.01:
+        scores["ranging"] += 2
+    if funding_flip >= 3:
+        scores["ranging"] += 1
+    if abs(funding_mean) < 0.15:
+        scores["ranging"] += 1
+    if liq_both < 0.2 and abs(liq_one_side) < 0.1:
+        scores["ranging"] += 2
+    if abs(delta_trend) < 0.02:
+        scores["ranging"] += 2
+    if abs(fwd_total) < 0.002:
+        scores["ranging"] += 1
 
     total      = sum(scores.values()) or 1
     regime     = max(scores, key=scores.get)
