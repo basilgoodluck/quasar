@@ -51,30 +51,45 @@ def _score_window(seq: np.ndarray) -> tuple[float, float, float]:
     liq_imbalance   = float(np.mean(np.abs(long_liq_ratio - short_liq_ratio)))
     cvd_flip        = float(np.mean(np.abs(np.diff(np.sign(cvd_norm)))))
 
+    avg_vol_ratio   = float(np.mean(vol_ratio))
+    avg_buy_ratio   = float(np.mean(buy_ratio))
+    avg_delta       = float(np.mean(np.abs(delta_norm)))
+    avg_accel       = float(np.mean(np.abs(cvd_accel)))
+    avg_funding     = float(np.mean(np.abs(funding)))
+    avg_large       = float(np.mean(large_trade))
+
     trending_score = (
-        abs(cvd_slope)       * 2.0 +
-        cvd_consistency      * 2.0 +
-        abs(oi_slope)        * 1.5 +
-        abs(agg_slope)       * 1.0 +
-        abs(ret_slope)       * 1.5 +
-        liq_imbalance        * 1.0
+        abs(cvd_slope)    * 2.0 +
+        cvd_consistency   * 2.0 +
+        abs(oi_slope)     * 1.5 +
+        abs(agg_slope)    * 1.0 +
+        abs(ret_slope)    * 1.5 +
+        liq_imbalance     * 1.0 +
+        avg_buy_ratio     * 1.0 +
+        avg_large         * 1.0 +
+        avg_delta         * 1.0 +
+        avg_accel         * 0.5
     )
 
     volatile_score = (
-        avg_vol              * 2.5 +
-        avg_hl               * 2.0 +
-        cvd_flip             * 1.5 +
-        (1.0 - liq_imbalance) * 1.0
+        avg_vol           * 2.5 +
+        avg_hl            * 2.0 +
+        cvd_flip          * 1.5 +
+        (1.0 - liq_imbalance) * 1.0 +
+        avg_vol_ratio     * 1.0 +
+        avg_funding       * 0.5
     )
 
     ranging_score = (
-        (1.0 - abs(cvd_slope))   * 2.0 +
-        (1.0 - abs(ret_slope))   * 2.0 +
-        (1.0 - avg_vol)          * 1.5 +
-        (1.0 - abs(oi_slope))    * 1.0
+        (1.0 - abs(cvd_slope))  * 2.0 +
+        (1.0 - abs(ret_slope))  * 2.0 +
+        (1.0 - avg_vol)         * 1.5 +
+        (1.0 - abs(oi_slope))   * 1.0 +
+        (1.0 - avg_vol_ratio)   * 1.0 +
+        (1.0 - avg_large)       * 0.5
     )
 
-    total = trending_score + volatile_score + ranging_score + 1e-9
+    total      = trending_score + volatile_score + ranging_score + 1e-9
     p_trending = trending_score / total
     p_volatile = volatile_score / total
     p_ranging  = ranging_score  / total
