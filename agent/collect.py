@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 import json
 import websockets
-from database.connection import get_connection
+from database.connection import get_pool
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,11 +17,11 @@ KLINE_LIMIT     = 1500
 AGG_TRADE_BATCH = int(os.getenv("AGG_TRADE_BATCH", "100"))
 
 
-def get_active_symbols():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT symbol, intervals FROM symbols WHERE active = TRUE")
-            return cur.fetchall()
+async def get_active_symbols():
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT symbol, intervals FROM symbols WHERE active = TRUE")
+        return [(r["symbol"], r["intervals"]) for r in rows]
 
 
 async def _get(session, url, params=None):
@@ -34,70 +34,65 @@ async def _get(session, url, params=None):
         return None
 
 
-def _save_ohlcv_cvd(symbol, interval, data):
+async def _save_ohlcv_cvd(symbol, interval, data):
     ohlcv_rows = [
         (symbol, interval, int(c[0]), float(c[1]), float(c[2]), float(c[3]),
          float(c[4]), float(c[5]), float(c[9]), int(c[6]))
         for c in data
     ]
-    cvd_rows = []
+    cvd_rows   = []
     cumulative = 0.0
     for c in data:
-        buy_vol = float(c[9])
-        delta = buy_vol - (float(c[5]) - buy_vol)
+        buy_vol    = float(c[9])
+        delta      = buy_vol - (float(c[5]) - buy_vol)
         cumulative += delta
         cvd_rows.append((symbol, interval, int(c[0]), round(delta, 4), round(cumulative, 4)))
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.executemany("""
-                INSERT INTO market_data (symbol, interval, open_time, open, high, low, close, volume, taker_buy_volume, close_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (symbol, interval, open_time) DO NOTHING
-            """, ohlcv_rows)
-            cur.executemany("""
-                INSERT INTO cvd_history (symbol, interval, open_time, delta, cvd)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (symbol, interval, open_time) DO NOTHING
-            """, cvd_rows)
-            conn.commit()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.executemany("""
+            INSERT INTO market_data (symbol, interval, open_time, open, high, low, close, volume, taker_buy_volume, close_time)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (symbol, interval, open_time) DO NOTHING
+        """, ohlcv_rows)
+        await conn.executemany("""
+            INSERT INTO cvd_history (symbol, interval, open_time, delta, cvd)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (symbol, interval, open_time) DO NOTHING
+        """, cvd_rows)
 
 
-def _save_liquidation(symbol, side, quantity, price, trade_time):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO liquidations (symbol, side, quantity, price, trade_time)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (symbol, side, quantity, price, trade_time))
-            conn.commit()
+async def _save_liquidation(symbol, side, quantity, price, trade_time):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO liquidations (symbol, side, quantity, price, trade_time)
+            VALUES ($1, $2, $3, $4, $5)
+        """, symbol, side, quantity, price, trade_time)
 
 
-def _save_agg_trades(rows):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.executemany("""
-                INSERT INTO agg_trades (symbol, trade_id, price, quantity, is_buyer_mm, trade_time)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (symbol, trade_id) DO NOTHING
-            """, rows)
-            conn.commit()
+async def _save_agg_trades(rows):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.executemany("""
+            INSERT INTO agg_trades (symbol, trade_id, price, quantity, is_buyer_mm, trade_time)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (symbol, trade_id) DO NOTHING
+        """, rows)
 
 
 async def _backfill_ohlcv(session, symbol, interval):
-    import time as t
-    end_time   = int(t.time() * 1000)
+    end_time   = int(time.time() * 1000)
     start_time = end_time - BACKFILL_DAYS * 86400 * 1000
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT MIN(open_time) FROM market_data WHERE symbol = %s AND interval = %s",
-                (symbol, interval)
-            )
-            row = cur.fetchone()
-            if row and row[0]:
-                end_time = int(row[0]) - 1
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT MIN(open_time) FROM market_data WHERE symbol = $1 AND interval = $2",
+            symbol, interval
+        )
+        if row and row["min"]:
+            end_time = int(row["min"]) - 1
 
     total = 0
     while True:
@@ -108,7 +103,7 @@ async def _backfill_ohlcv(session, symbol, interval):
         })
         if not data:
             break
-        _save_ohlcv_cvd(symbol, interval, data)
+        await _save_ohlcv_cvd(symbol, interval, data)
         total += len(data)
         logger.info(f"[{symbol}/{interval}] backfill: {total} rows")
         if len(data) < KLINE_LIMIT:
@@ -118,8 +113,7 @@ async def _backfill_ohlcv(session, symbol, interval):
 
 
 async def _backfill_funding(session, symbol):
-    import time as t
-    end_time   = int(t.time() * 1000)
+    end_time   = int(time.time() * 1000)
     start_time = end_time - BACKFILL_DAYS * 86400 * 1000
     total      = 0
     while True:
@@ -133,14 +127,13 @@ async def _backfill_funding(session, symbol):
              float(f.get("markPrice", 0) or 0))
             for f in data
         ]
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.executemany("""
-                    INSERT INTO funding_rates (symbol, funding_time, funding_rate, mark_price)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (symbol, funding_time) DO NOTHING
-                """, rows)
-                conn.commit()
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.executemany("""
+                INSERT INTO funding_rates (symbol, funding_time, funding_rate, mark_price)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (symbol, funding_time) DO NOTHING
+            """, rows)
         total += len(rows)
         if len(data) < 1000:
             break
@@ -150,8 +143,7 @@ async def _backfill_funding(session, symbol):
 
 
 async def _backfill_oi(session, symbol, period):
-    import time as t
-    end_time   = int(t.time() * 1000)
+    end_time   = int(time.time() * 1000)
     start_time = end_time - BACKFILL_DAYS * 86400 * 1000
     total      = 0
     while True:
@@ -166,14 +158,13 @@ async def _backfill_oi(session, symbol, period):
              float(o.get("sumOpenInterestValue", 0) or 0))
             for o in data
         ]
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.executemany("""
-                    INSERT INTO oi_history (symbol, period, timestamp, open_interest, open_interest_value)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (symbol, period, timestamp) DO NOTHING
-                """, rows)
-                conn.commit()
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.executemany("""
+                INSERT INTO oi_history (symbol, period, timestamp, open_interest, open_interest_value)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (symbol, period, timestamp) DO NOTHING
+            """, rows)
         total += len(rows)
         if len(data) < 500:
             break
@@ -193,14 +184,13 @@ async def _live_funding(session, symbol):
          float(f.get("markPrice", 0) or 0))
         for f in data
     ]
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.executemany("""
-                INSERT INTO funding_rates (symbol, funding_time, funding_rate, mark_price)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (symbol, funding_time) DO NOTHING
-            """, rows)
-            conn.commit()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.executemany("""
+            INSERT INTO funding_rates (symbol, funding_time, funding_rate, mark_price)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (symbol, funding_time) DO NOTHING
+        """, rows)
 
 
 async def _live_oi(session, symbol, period):
@@ -214,14 +204,13 @@ async def _live_oi(session, symbol, period):
          float(o.get("sumOpenInterestValue", 0) or 0))
         for o in data
     ]
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.executemany("""
-                INSERT INTO oi_history (symbol, period, timestamp, open_interest, open_interest_value)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (symbol, period, timestamp) DO NOTHING
-            """, rows)
-            conn.commit()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.executemany("""
+            INSERT INTO oi_history (symbol, period, timestamp, open_interest, open_interest_value)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (symbol, period, timestamp) DO NOTHING
+        """, rows)
 
 
 async def _ws_klines(symbol, interval):
@@ -240,7 +229,7 @@ async def _ws_klines(symbol, interval):
                         k["t"], k["o"], k["h"], k["l"], k["c"],
                         k["v"], k["T"], None, None, k["V"]
                     ]
-                    _save_ohlcv_cvd(symbol, interval, [candle])
+                    await _save_ohlcv_cvd(symbol, interval, [candle])
         except Exception as e:
             logger.error(f"[ws] klines {stream} error: {e} — reconnecting in 5s")
             await asyncio.sleep(5)
@@ -256,7 +245,7 @@ async def _ws_liquidations(symbol):
                 async for raw in ws:
                     msg   = json.loads(raw)
                     order = msg.get("o", {})
-                    _save_liquidation(
+                    await _save_liquidation(
                         symbol,
                         order.get("S"),
                         float(order.get("q", 0)),
@@ -280,20 +269,20 @@ async def _ws_agg_trades(symbol):
                     msg = json.loads(raw)
                     buffer.append((
                         symbol,
-                        int(msg["a"]),    # trade_id
-                        float(msg["p"]),  # price
-                        float(msg["q"]),  # quantity
-                        bool(msg["m"]),   # is_buyer_mm: True = sell trade, False = buy trade
-                        int(msg["T"]),    # trade_time
+                        int(msg["a"]),
+                        float(msg["p"]),
+                        float(msg["q"]),
+                        bool(msg["m"]),
+                        int(msg["T"]),
                     ))
                     if len(buffer) >= AGG_TRADE_BATCH:
-                        _save_agg_trades(buffer)
+                        await _save_agg_trades(buffer)
                         buffer = []
         except Exception as e:
             logger.error(f"[ws] aggTrades {stream} error: {e} — reconnecting in 5s")
             if buffer:
                 try:
-                    _save_agg_trades(buffer)
+                    await _save_agg_trades(buffer)
                 except Exception:
                     pass
                 buffer = []
@@ -328,7 +317,7 @@ async def backfill(symbols_intervals):
 
 
 async def run():
-    symbols_intervals = get_active_symbols()
+    symbols_intervals = await get_active_symbols()
     if not symbols_intervals:
         logger.error("No active symbols in DB")
         return
