@@ -297,9 +297,5 @@ def build_live_sequence(symbol, interval=INTERVAL, window=WINDOW):
     if not os.path.exists(scaler_path):
         return None
 
-    scaler     = np.load(scaler_path)
-    mean, std  = scaler[0], scaler[1]
-    arr        = features.values.astype(np.float32)
-    normed     = (arr - mean) / (std + 1e-8)
-
-    return normed[-window:][np.newaxis, :, :].astype(np.float32)
+    arr = features.values.astype(np.float32)
+    return arr[-window:][np.newaxis, :, :].astype(np.float32)
