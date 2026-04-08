@@ -87,8 +87,9 @@ async def test_full_flow_approved_trade(sample_regime, sample_decision):
 
 @pytest.mark.asyncio
 async def test_rejected_trade_intent_does_not_execute(sample_decision):
-    with patch("agent.strategy.base.submit_trade_intent", return_value={"approved": False, "reason": "Exceeds maxPositionSize"}), \
-         patch("contracts.vault.get_available_capital",   return_value=500.0):
+    with patch("contracts.vault.get_available_capital", return_value=500.0), \
+         patch("agent.strategy.base._ensure_paper_init", new=AsyncMock()), \
+         patch("asyncio.create_subprocess_exec", side_effect=Exception("order rejected")):
 
         from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
