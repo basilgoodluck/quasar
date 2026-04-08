@@ -4,6 +4,8 @@ WORKDIR /app
 
 ENV PYTHONPATH=/app
 ENV PATH="/root/.cargo/bin:/root/.local/bin:${PATH}"
+ENV KRAKEN_FUTURES_URL="https://demo-futures.kraken.com"
+ENV KRAKEN_DANGER_ALLOW_ANY_URL_HOST=1
 
 RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
