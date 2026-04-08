@@ -11,7 +11,10 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 def _pf(symbol: str) -> str:
-    return symbol if symbol.startswith("PF_") else f"PF_{symbol}"
+    special = {"BTC": "XBT"}
+    base    = symbol.replace("USDT", "")
+    base    = special.get(base, base)
+    return f"PF_{base}USD"
 
 def _write_pending_outcome(
     intent_hash: str,

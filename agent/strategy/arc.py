@@ -1,10 +1,10 @@
 import numpy as np
 from agent.strategy.base import BaseStrategy
 from agent.regime import detect_regime
-from agent.openai_client import get_trade_params
 from agent.features import _fetch_ohlcv, INTERVAL
 from agent.reputation import get_reputation_score
 from config import STRUCTURE_LOOKBACK, ARC_FISHER_PERIOD
+from agent.strategy.risk import compute_risk
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -115,7 +115,8 @@ class ARCStrategy(BaseStrategy):
 
         # At this point regime is trending, trending_volatile, or high-confidence volatile
         # Now use OpenAI to determine direction (long/short) and sizing
-        params = get_trade_params(regime, reputation=reputation)
+
+        params = compute_risk(regime, reputation=reputation)
 
         if params["action"] == "SKIP":
             return self.skip(

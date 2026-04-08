@@ -9,6 +9,26 @@ from logger import get_logger
 logger   = get_logger(__name__)
 strategy = ARCStrategy()
 
+DEFAULT_SYMBOLS = [
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
+    "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "LINKUSDT",
+    "LTCUSDT", "UNIUSDT", "ATOMUSDT", "NEARUSDT", "APTUSDT",
+    "OPUSDT", "ARBUSDT", "INJUSDT", "SUIUSDT", "MATICUSDT",
+]
+
+
+def seed_symbols():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for symbol in DEFAULT_SYMBOLS:
+                cur.execute("""
+                    INSERT INTO symbols (symbol, active, intervals, asset_class)
+                    VALUES (%s, TRUE, '{5m,30m}', 'crypto')
+                    ON CONFLICT (symbol) DO NOTHING
+                """, (symbol,))
+            conn.commit()
+    logger.info(f"[main] seeded {len(DEFAULT_SYMBOLS)} symbols")
+
 
 def get_active_symbols() -> list[str]:
     with get_connection() as conn:
@@ -26,6 +46,7 @@ def get_current_price(symbol: str) -> float | None:
 
 def main():
     logger.info("[main] agent starting")
+    seed_symbols()
     while True:
         start      = time.time()
         symbols    = get_active_symbols()
