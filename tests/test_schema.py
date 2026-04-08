@@ -1,7 +1,6 @@
 import os
 import pytest
 import asyncpg
-import asyncio
 import time
 
 

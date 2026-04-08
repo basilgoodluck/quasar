@@ -1,5 +1,4 @@
 import os
-import asyncio
 import numpy as np
 from agent.features import build_live_sequence, INTERVAL, WINDOW
 from config import REPUTATION_CONFIDENCE_BOOST

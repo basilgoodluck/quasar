@@ -1,7 +1,7 @@
 import json
 import pytest
 import numpy as np
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 
 
 def _make_trending_seq():

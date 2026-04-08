@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+import asyncio
 from database.connection import get_pool
 
 INTERVAL  = "5m"
@@ -242,5 +243,3 @@ async def build_live_sequence(symbol, interval=INTERVAL, window=WINDOW):
     arr = features.values.astype(np.float32)
     return arr[-window:][np.newaxis, :, :].astype(np.float32)
 
-
-import asyncio
