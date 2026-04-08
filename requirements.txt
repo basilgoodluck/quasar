@@ -9,3 +9,5 @@ aiohttp
 psycopg2-binary
 pytest
 alembic
+uvicorn
+fastapi
