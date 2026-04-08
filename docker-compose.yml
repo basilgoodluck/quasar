@@ -82,6 +82,7 @@ services:
       - quasar-net
     volumes:
       - models_data:/app/models
+
   test:
     image: noblebasil/quasar-test:latest
     container_name: quasar-test

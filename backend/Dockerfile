@@ -1,11 +1,3 @@
-FROM python:3.11-slim
+FROM quasar-base:latest
 
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-# Run FastAPI with Uvicorn
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7052"]
