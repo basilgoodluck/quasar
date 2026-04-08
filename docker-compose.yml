@@ -25,9 +25,6 @@ services:
     image: noblebasil/quasar-collector:latest
     container_name: quasar-collector
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: collector/Dockerfile
     env_file: .env
     depends_on:
       postgres:
@@ -39,9 +36,6 @@ services:
     image: noblebasil/quasar-trainer:latest
     container_name: quasar-trainer
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: trainer/Dockerfile
     env_file: .env
     depends_on:
       postgres:
@@ -55,9 +49,6 @@ services:
     image: noblebasil/quasar-outcome-tracker:latest
     container_name: quasar-outcome-tracker
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: outcome_tracker/Dockerfile
     env_file: .env
     depends_on:
       postgres:
@@ -71,25 +62,6 @@ services:
     image: noblebasil/quasar-agent:latest
     container_name: quasar-agent
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: agent/Dockerfile
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - quasar-net
-    volumes:
-      - models_data:/app/models
-
-  test:
-    image: noblebasil/quasar-test:latest
-    container_name: quasar-test
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: test/Dockerfile
     env_file: .env
     depends_on:
       postgres:
@@ -103,9 +75,6 @@ services:
     image: noblebasil/quasar-backend:latest
     container_name: quasar-backend
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
     env_file: .env
     ports:
       - "${BACKEND_PORT:-7052}:7052"
