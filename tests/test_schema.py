@@ -1,65 +1,66 @@
 import os
-import psycopg2
+import pytest
+import asyncpg
+import asyncio
+import time
 
 
-def get_test_conn():
-    return psycopg2.connect(
+async def get_test_conn():
+    return await asyncpg.connect(
         host=os.environ["POSTGRES_HOST"],
         port=int(os.environ["POSTGRES_PORT"]),
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
-        dbname=os.environ["POSTGRES_DB"],
+        database=os.environ["POSTGRES_DB"],
     )
 
 
-def test_postgres_connection():
-    conn = get_test_conn()
+@pytest.mark.asyncio
+async def test_postgres_connection():
+    conn = await get_test_conn()
     assert conn is not None
-    conn.close()
+    await conn.close()
 
 
-def test_required_tables_exist():
+@pytest.mark.asyncio
+async def test_required_tables_exist():
     tables = [
         "users", "sessions", "symbols", "agents",
         "market_data", "funding_rates", "oi_history",
         "liquidations", "cvd_history", "snapshots",
         "agg_trades", "trade_outcomes", "reputation_history", "retrain_log",
     ]
-    conn = get_test_conn()
-    cur  = conn.cursor()
-    cur.execute("""
+    conn     = await get_test_conn()
+    rows     = await conn.fetch("""
         SELECT table_name FROM information_schema.tables
         WHERE table_schema = 'public'
     """)
-    existing = {r[0] for r in cur.fetchall()}
-    cur.close()
-    conn.close()
+    existing = {r["table_name"] for r in rows}
+    await conn.close()
     for table in tables:
         assert table in existing, f"Missing table: {table}"
 
 
-def test_symbols_seeded():
-    conn = get_test_conn()
-    cur  = conn.cursor()
-    cur.execute("SELECT symbol FROM symbols WHERE active = TRUE")
-    symbols = [r[0] for r in cur.fetchall()]
-    cur.close()
-    conn.close()
+@pytest.mark.asyncio
+async def test_symbols_seeded():
+    conn    = await get_test_conn()
+    rows    = await conn.fetch("SELECT symbol FROM symbols WHERE active = TRUE")
+    symbols = [r["symbol"] for r in rows]
+    await conn.close()
     assert "BTCUSDT" in symbols
     assert "ETHUSDT" in symbols
     assert "SOLUSDT" in symbols
 
 
-def test_trade_outcomes_columns():
-    conn = get_test_conn()
-    cur  = conn.cursor()
-    cur.execute("""
+@pytest.mark.asyncio
+async def test_trade_outcomes_columns():
+    conn = await get_test_conn()
+    rows = await conn.fetch("""
         SELECT column_name FROM information_schema.columns
         WHERE table_name = 'trade_outcomes'
     """)
-    cols = {r[0] for r in cur.fetchall()}
-    cur.close()
-    conn.close()
+    cols = {r["column_name"] for r in rows}
+    await conn.close()
     expected = {
         "id", "intent_hash", "pair", "action", "entry_price",
         "exit_price", "amount_usd", "confidence_at_entry",
@@ -70,56 +71,43 @@ def test_trade_outcomes_columns():
         assert col in cols, f"Missing column: {col}"
 
 
-def test_write_and_read_trade_outcome():
-    import time
-    conn = get_test_conn()
-    cur  = conn.cursor()
-    cur.execute("""
+@pytest.mark.asyncio
+async def test_write_and_read_trade_outcome():
+    conn = await get_test_conn()
+    await conn.execute("""
         INSERT INTO trade_outcomes
             (intent_hash, pair, action, entry_price, amount_usd,
              confidence_at_entry, reputation_at_entry, status, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (intent_hash) DO NOTHING
-    """, ("0xtest123", "BTCUSDT", "LONG", 65000.0, 100.0, 0.72, 0.5, "PENDING", int(time.time())))
-    conn.commit()
-    cur.execute("SELECT status FROM trade_outcomes WHERE intent_hash = '0xtest123'")
-    row = cur.fetchone()
+    """, "0xtest123", "BTCUSDT", "LONG", 65000.0, 100.0, 0.72, 0.5, "PENDING", int(time.time()))
+    row = await conn.fetchrow("SELECT status FROM trade_outcomes WHERE intent_hash = '0xtest123'")
     assert row is not None
-    assert row[0] == "PENDING"
-    cur.execute("DELETE FROM trade_outcomes WHERE intent_hash = '0xtest123'")
-    conn.commit()
-    cur.close()
-    conn.close()
+    assert row["status"] == "PENDING"
+    await conn.execute("DELETE FROM trade_outcomes WHERE intent_hash = '0xtest123'")
+    await conn.close()
 
 
-def test_reputation_history_write():
-    import time
-    conn = get_test_conn()
-    cur  = conn.cursor()
-    cur.execute("""
+@pytest.mark.asyncio
+async def test_reputation_history_write():
+    conn = await get_test_conn()
+    await conn.execute("""
         INSERT INTO reputation_history (agent_id, score, recorded_at)
-        VALUES (%s, %s, %s)
-    """, (0, 0.65, int(time.time())))
-    conn.commit()
-    cur.execute("SELECT score FROM reputation_history WHERE agent_id = 0 ORDER BY id DESC LIMIT 1")
-    row = cur.fetchone()
+        VALUES ($1, $2, $3)
+    """, 0, 0.65, int(time.time()))
+    row = await conn.fetchrow("SELECT score FROM reputation_history WHERE agent_id = 0 ORDER BY id DESC LIMIT 1")
     assert row is not None
-    assert float(row[0]) == 0.65
-    cur.execute("DELETE FROM reputation_history WHERE agent_id = 0")
-    conn.commit()
-    cur.close()
-    conn.close()
+    assert float(row["score"]) == 0.65
+    await conn.execute("DELETE FROM reputation_history WHERE agent_id = 0")
+    await conn.close()
 
 
-def test_indexes_exist():
-    conn = get_test_conn()
-    cur  = conn.cursor()
-    cur.execute("""
-        SELECT indexname FROM pg_indexes WHERE schemaname = 'public'
-    """)
-    indexes = {r[0] for r in cur.fetchall()}
-    cur.close()
-    conn.close()
+@pytest.mark.asyncio
+async def test_indexes_exist():
+    conn    = await get_test_conn()
+    rows    = await conn.fetch("SELECT indexname FROM pg_indexes WHERE schemaname = 'public'")
+    indexes = {r["indexname"] for r in rows}
+    await conn.close()
     expected = [
         "idx_market_data_symbol_interval",
         "idx_trade_outcomes_status",
