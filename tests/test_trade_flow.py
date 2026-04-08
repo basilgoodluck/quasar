@@ -1,4 +1,5 @@
 import json
+import numpy as np
 from unittest.mock import patch, MagicMock
 
 
@@ -14,18 +15,32 @@ def _mock_db_conn():
     return mock_conn
 
 
+def _make_trending_seq():
+    seq = np.zeros((1, 24, 14), dtype="float32")
+    seq[0, :, 0]  = np.linspace(0.002, 0.02,  24)   # log_return strong upslope
+    seq[0, :, 1]  = np.linspace(0.01,  0.05,  24)   # hl_range growing
+    seq[0, :, 2]  = np.linspace(0.5,   2.0,   24)   # vol_ratio rising
+    seq[0, :, 3]  = np.linspace(0.55,  0.85,  24)   # buy_ratio strong
+    seq[0, :, 4]  = np.linspace(0.1,   0.4,   24)   # realized_vol moderate
+    seq[0, :, 5]  = np.linspace(0.2,   1.0,   24)   # cvd_norm strong upslope
+    seq[0, :, 6]  = np.linspace(0.1,   0.8,   24)   # delta_norm
+    seq[0, :, 7]  = np.linspace(0.01,  0.1,   24)   # cvd_accel
+    seq[0, :, 8]  = np.full(24, 0.001)               # funding neutral
+    seq[0, :, 9]  = np.linspace(0.05,  0.5,   24)   # oi_change rising
+    seq[0, :, 10] = np.linspace(0.6,   0.9,   24)   # long_liq_ratio one-sided
+    seq[0, :, 11] = np.linspace(0.1,   0.4,   24)   # short_liq_ratio low
+    seq[0, :, 12] = np.linspace(0.5,   0.9,   24)   # large_trade rising
+    seq[0, :, 13] = np.linspace(0.55,  0.85,  24)   # buy_aggression strong
+    return seq
+
+
 @patch("agent.reputation.get_connection")
 @patch("agent.features.get_connection")
 def test_regime_direction_from_confidence(mock_feat_conn, mock_rep_conn):
     mock_feat_conn.return_value = _mock_db_conn()
     mock_rep_conn.return_value  = _mock_db_conn()
 
-    import numpy as np
-
-    fake_seq = np.zeros((1, 24, 14), dtype="float32")
-    fake_seq[0, :, 0] = np.linspace(0.001, 0.01, 24)
-    fake_seq[0, :, 5] = np.linspace(0.1, 0.9, 24)
-    fake_seq[0, :, 9] = np.linspace(0.05, 0.5, 24)
+    fake_seq = _make_trending_seq()
 
     with patch("agent.regime.build_live_sequence", return_value=fake_seq):
         from agent.regime import detect_regime
@@ -113,11 +128,7 @@ def test_reputation_adjusts_regime_thresholds(mock_feat_conn, mock_rep_conn):
     mock_feat_conn.return_value = _mock_db_conn()
     mock_rep_conn.return_value  = _mock_db_conn()
 
-    import numpy as np
-
-    fake_seq = np.zeros((1, 24, 14), dtype="float32")
-    fake_seq[0, :, 0] = np.linspace(0.001, 0.005, 24)
-    fake_seq[0, :, 5] = np.linspace(0.05, 0.25, 24)
+    fake_seq = _make_trending_seq()
 
     from agent.regime import detect_regime
 
