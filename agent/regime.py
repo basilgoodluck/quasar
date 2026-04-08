@@ -59,34 +59,34 @@ def _score_window(seq: np.ndarray) -> tuple[float, float, float]:
     avg_large       = float(np.mean(large_trade))
 
     trending_score = (
-        abs(cvd_slope)    * 2.0 +
-        cvd_consistency   * 2.0 +
-        abs(oi_slope)     * 1.5 +
-        abs(agg_slope)    * 1.0 +
-        abs(ret_slope)    * 1.5 +
-        liq_imbalance     * 1.0 +
-        avg_buy_ratio     * 1.0 +
-        avg_large         * 1.0 +
-        avg_delta         * 1.0 +
-        avg_accel         * 0.5
+        abs(cvd_slope)    * 3.0 +
+        cvd_consistency   * 3.0 +
+        abs(oi_slope)     * 2.0 +
+        abs(agg_slope)    * 2.0 +
+        abs(ret_slope)    * 2.0 +
+        liq_imbalance     * 1.5 +
+        avg_buy_ratio     * 1.5 +
+        avg_large         * 1.5 +
+        avg_delta         * 1.5 +
+        avg_accel         * 1.0
     )
 
     volatile_score = (
-        avg_vol           * 2.5 +
-        avg_hl            * 2.0 +
-        cvd_flip          * 1.5 +
+        avg_vol               * 2.5 +
+        avg_hl                * 2.0 +
+        cvd_flip              * 1.5 +
         (1.0 - liq_imbalance) * 1.0 +
-        avg_vol_ratio     * 1.0 +
-        avg_funding       * 0.5
+        avg_vol_ratio         * 1.0 +
+        avg_funding           * 0.5
     )
 
     ranging_score = (
-        (1.0 - abs(cvd_slope))  * 2.0 +
-        (1.0 - abs(ret_slope))  * 2.0 +
-        (1.0 - avg_vol)         * 1.5 +
-        (1.0 - abs(oi_slope))   * 1.0 +
-        (1.0 - avg_vol_ratio)   * 1.0 +
-        (1.0 - avg_large)       * 0.5
+        (1.0 - abs(cvd_slope)) * 1.0 +
+        (1.0 - abs(ret_slope)) * 1.0 +
+        (1.0 - avg_vol)        * 0.5 +
+        (1.0 - abs(oi_slope))  * 0.5 +
+        (1.0 - avg_vol_ratio)  * 0.5 +
+        (1.0 - avg_large)      * 0.5
     )
 
     total      = trending_score + volatile_score + ranging_score + 1e-9
