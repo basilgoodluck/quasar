@@ -26,7 +26,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          driver-opts: image=moby/buildkit:latest
           name: quasar-builder
 
       - name: Build and push base image
@@ -37,8 +36,6 @@ jobs:
           file: ./Dockerfile.base
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-base:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-base:latest
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-base:latest,mode=max
 
       - name: Build and push agent image
         uses: docker/build-push-action@v5
@@ -49,10 +46,6 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-agent:latest
           build-args: DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          cache-from: |
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-base:latest
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-agent:latest
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-agent:latest,mode=max
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
@@ -63,10 +56,6 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-backend:latest
           build-args: DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          cache-from: |
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-base:latest
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-backend:latest
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-backend:latest,mode=max
 
       - name: Build and push collector image
         uses: docker/build-push-action@v5
@@ -77,10 +66,6 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-collector:latest
           build-args: DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          cache-from: |
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-base:latest
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-collector:latest
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-collector:latest,mode=max
 
       - name: Build and push trainer image
         uses: docker/build-push-action@v5
@@ -91,10 +76,6 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-trainer:latest
           build-args: DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          cache-from: |
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-base:latest
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-trainer:latest
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-trainer:latest,mode=max
 
       - name: Build and push outcome_tracker image
         uses: docker/build-push-action@v5
@@ -105,10 +86,6 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/quasar-outcome-tracker:latest
           build-args: DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          cache-from: |
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-base:latest
-            type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-outcome-tracker:latest
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/quasar-outcome-tracker:latest,mode=max
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
