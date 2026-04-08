@@ -1,4 +1,5 @@
 import os
+import asyncio
 import numpy as np
 from agent.features import build_live_sequence, INTERVAL, WINDOW
 from config import REPUTATION_CONFIDENCE_BOOST
@@ -51,12 +52,12 @@ def _score_window(seq: np.ndarray) -> tuple[float, float, float]:
     liq_imbalance   = float(np.mean(np.abs(long_liq_ratio - short_liq_ratio)))
     cvd_flip        = float(np.mean(np.abs(np.diff(np.sign(cvd_norm)))))
 
-    avg_vol_ratio   = float(np.mean(vol_ratio))
-    avg_buy_ratio   = float(np.mean(buy_ratio))
-    avg_delta       = float(np.mean(np.abs(delta_norm)))
-    avg_accel       = float(np.mean(np.abs(cvd_accel)))
-    avg_funding     = float(np.mean(np.abs(funding)))
-    avg_large       = float(np.mean(large_trade))
+    avg_vol_ratio = float(np.mean(vol_ratio))
+    avg_buy_ratio = float(np.mean(buy_ratio))
+    avg_delta     = float(np.mean(np.abs(delta_norm)))
+    avg_accel     = float(np.mean(np.abs(cvd_accel)))
+    avg_funding   = float(np.mean(np.abs(funding)))
+    avg_large     = float(np.mean(large_trade))
 
     trending_score = (
         abs(cvd_slope)    * 3.0 +
@@ -81,12 +82,12 @@ def _score_window(seq: np.ndarray) -> tuple[float, float, float]:
     )
 
     ranging_score = (
-        (1.0 - abs(cvd_slope)) * 1.0 +
-        (1.0 - abs(ret_slope)) * 1.0 +
-        (1.0 - avg_vol)        * 0.5 +
-        (1.0 - abs(oi_slope))  * 0.5 +
-        (1.0 - avg_vol_ratio)  * 0.5 +
-        (1.0 - avg_large)      * 0.5
+        (1.0 - abs(cvd_slope))  * 1.0 +
+        (1.0 - abs(ret_slope))  * 1.0 +
+        (1.0 - avg_vol)         * 0.5 +
+        (1.0 - abs(oi_slope))   * 0.5 +
+        (1.0 - avg_vol_ratio)   * 0.5 +
+        (1.0 - avg_large)       * 0.5
     )
 
     total      = trending_score + volatile_score + ranging_score + 1e-9
@@ -97,8 +98,8 @@ def _score_window(seq: np.ndarray) -> tuple[float, float, float]:
     return round(float(p_trending), 4), round(float(p_ranging), 4), round(float(p_volatile), 4)
 
 
-def detect_regime(symbol: str, reputation: float = 0.0) -> dict:
-    seq = build_live_sequence(symbol, interval=INTERVAL, window=WINDOW)
+async def detect_regime(symbol: str, reputation: float = 0.0) -> dict:
+    seq = await build_live_sequence(symbol, interval=INTERVAL, window=WINDOW)
 
     if seq is None:
         logger.warning(f"[{symbol}] not enough data for regime inference")

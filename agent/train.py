@@ -1,10 +1,11 @@
 import os
 import time
+import asyncio
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from database.connection import get_connection
+from database.connection import get_pool
 from agent.features import build_sequences, INTERVAL, WINDOW
 from agent.model import get_model, save_model
 from logger import get_logger
@@ -21,36 +22,35 @@ RETRAIN_INTERVAL = int(os.getenv("RETRAIN_INTERVAL_SEC", "3600"))
 PATIENCE         = int(os.getenv("TRAIN_PATIENCE", "10"))
 
 
-def get_active_symbols():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT symbol FROM symbols WHERE active = TRUE")
-            return [r[0] for r in cur.fetchall()]
+async def get_active_symbols() -> list[str]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT symbol FROM symbols WHERE active = TRUE")
+        return [r["symbol"] for r in rows]
 
 
-def _count_real_labels():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM trade_outcomes WHERE status IN ('WIN','LOSS','NEUTRAL')")
-            return cur.fetchone()[0]
+async def count_real_labels() -> int:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT COUNT(*) FROM trade_outcomes WHERE status IN ('WIN','LOSS','NEUTRAL')")
+        return row["count"]
 
 
-def _log_retrain_event(val_loss: float, real_label_count: int):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO retrain_log (val_loss, real_label_count, trained_at)
-                VALUES (%s, %s, EXTRACT(EPOCH FROM NOW())::BIGINT)
-            """, (val_loss, real_label_count))
-            conn.commit()
+async def log_retrain_event(val_loss: float, real_label_count: int):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO retrain_log (val_loss, real_label_count, trained_at)
+            VALUES ($1, $2, EXTRACT(EPOCH FROM NOW())::BIGINT)
+        """, val_loss, real_label_count)
 
 
-def load_data(symbols):
+async def load_data(symbols):
     all_X, all_y = [], []
     num_symbols  = len(symbols)
 
     for sid, symbol in enumerate(symbols):
-        X, y = build_sequences(symbol, interval=INTERVAL, window=WINDOW)
+        X, y = await build_sequences(symbol, interval=INTERVAL, window=WINDOW)
 
         if X is None or len(X) == 0:
             logger.warning(f"[{symbol}] not enough data, skipping")
@@ -64,9 +64,9 @@ def load_data(symbols):
         np.save(os.path.join(MODEL_DIR, f"scaler_{symbol}.npy"),
                 np.array([mean.squeeze(), std.squeeze()]))
 
-        one_hot         = np.zeros((X.shape[0], X.shape[1], num_symbols), dtype=np.float32)
+        one_hot            = np.zeros((X.shape[0], X.shape[1], num_symbols), dtype=np.float32)
         one_hot[:, :, sid] = 1.0
-        X               = np.concatenate([X, one_hot], axis=2)
+        X                  = np.concatenate([X, one_hot], axis=2)
 
         all_X.append(X)
         all_y.append(y)
@@ -95,13 +95,13 @@ def _compute_class_weights(y: np.ndarray, num_classes: int = 3) -> torch.Tensor:
     return torch.tensor(weights, dtype=torch.float32).to(DEVICE)
 
 
-def train_one_model():
-    symbols    = get_active_symbols()
-    real_count = _count_real_labels()
+async def train_one_model():
+    symbols    = await get_active_symbols()
+    real_count = await count_real_labels()
 
     logger.info(f"Symbols: {symbols} | Real outcome labels: {real_count} | Interval: {INTERVAL} | Window: {WINDOW}")
 
-    X, y = load_data(symbols)
+    X, y = await load_data(symbols)
     logger.info(f"Total sequences: {len(X)} | Feature dim: {X.shape[2]}")
 
     X_t = torch.tensor(X, dtype=torch.float32)
@@ -114,9 +114,8 @@ def train_one_model():
     train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  drop_last=True)
     val_dl   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
 
-    input_size = X.shape[2]
-    model      = get_model(input_size, DEVICE)
-
+    input_size    = X.shape[2]
+    model         = get_model(input_size, DEVICE)
     optimizer     = torch.optim.Adam(model.parameters(), lr=LR)
     class_weights = _compute_class_weights(y)
     criterion     = nn.CrossEntropyLoss(weight=class_weights)
@@ -166,15 +165,19 @@ def train_one_model():
                 logger.info(f"Early stopping at epoch {epoch} | best val loss: {best_val_loss:.4f}")
                 break
 
-    _log_retrain_event(best_val_loss, real_count)
+    await log_retrain_event(best_val_loss, real_count)
     logger.info(f"Retrain finished | best val loss: {best_val_loss:.4f} | model saved to {model_path}")
 
 
-if __name__ == "__main__":
+async def main():
     while True:
         try:
-            train_one_model()
+            await train_one_model()
         except Exception as e:
             logger.exception(f"Trainer crashed: {e}")
         logger.info(f"Sleeping {RETRAIN_INTERVAL}s before next retrain")
-        time.sleep(RETRAIN_INTERVAL)
+        await asyncio.sleep(RETRAIN_INTERVAL)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

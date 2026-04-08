@@ -1,23 +1,22 @@
 import os
 import numpy as np
 import pandas as pd
-from database.connection import get_connection
+from database.connection import get_pool
 
 INTERVAL  = "5m"
 WINDOW    = 24
 MODEL_DIR = "/app/models"
 
 
-def _fetch_ohlcv(symbol, interval, limit):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT open_time, open, high, low, close, volume, taker_buy_volume
-                FROM market_data
-                WHERE symbol = %s AND interval = %s
-                ORDER BY open_time DESC LIMIT %s
-            """, (symbol, interval, limit))
-            rows = cur.fetchall()
+async def fetch_ohlcv(symbol, interval, limit):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT open_time, open, high, low, close, volume, taker_buy_volume
+            FROM market_data
+            WHERE symbol = $1 AND interval = $2
+            ORDER BY open_time DESC LIMIT $3
+        """, symbol, interval, limit)
     if not rows:
         return None
     df = pd.DataFrame(rows, columns=["open_time", "open", "high", "low", "close", "volume", "taker_buy_volume"])
@@ -27,64 +26,60 @@ def _fetch_ohlcv(symbol, interval, limit):
     })
 
 
-def _fetch_cvd(symbol, interval, limit):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT open_time, delta, cvd
-                FROM cvd_history
-                WHERE symbol = %s AND interval = %s
-                ORDER BY open_time DESC LIMIT %s
-            """, (symbol, interval, limit))
-            rows = cur.fetchall()
+async def fetch_cvd(symbol, interval, limit):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT open_time, delta, cvd
+            FROM cvd_history
+            WHERE symbol = $1 AND interval = $2
+            ORDER BY open_time DESC LIMIT $3
+        """, symbol, interval, limit)
     if not rows:
         return None
     df = pd.DataFrame(rows, columns=["open_time", "delta", "cvd"])
     return df.sort_values("open_time").reset_index(drop=True).astype({"delta": float, "cvd": float})
 
 
-def _fetch_funding(symbol, limit):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT funding_time, funding_rate
-                FROM funding_rates
-                WHERE symbol = %s
-                ORDER BY funding_time DESC LIMIT %s
-            """, (symbol, limit))
-            rows = cur.fetchall()
+async def fetch_funding(symbol, limit):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT funding_time, funding_rate
+            FROM funding_rates
+            WHERE symbol = $1
+            ORDER BY funding_time DESC LIMIT $2
+        """, symbol, limit)
     if not rows:
         return None
     df = pd.DataFrame(rows, columns=["funding_time", "funding_rate"])
     return df.sort_values("funding_time").reset_index(drop=True).astype({"funding_rate": float})
 
 
-def _fetch_oi(symbol, period, limit):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT timestamp, open_interest
-                FROM oi_history
-                WHERE symbol = %s AND period = %s
-                ORDER BY timestamp DESC LIMIT %s
-            """, (symbol, period, limit))
-            rows = cur.fetchall()
+async def fetch_oi(symbol, period, limit):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT timestamp, open_interest
+            FROM oi_history
+            WHERE symbol = $1 AND period = $2
+            ORDER BY timestamp DESC LIMIT $3
+        """, symbol, period, limit)
     if not rows:
         return None
     df = pd.DataFrame(rows, columns=["timestamp", "open_interest"])
     return df.sort_values("timestamp").reset_index(drop=True).astype({"open_interest": float})
 
 
-def _fetch_liquidations_timeseries(symbol, limit):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT side, quantity, trade_time
-                FROM liquidations
-                WHERE symbol = %s
-                ORDER BY trade_time DESC LIMIT %s
-            """, (symbol, limit))
-            rows = cur.fetchall()
+async def fetch_liquidations(symbol, limit):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT side, quantity, trade_time
+            FROM liquidations
+            WHERE symbol = $1
+            ORDER BY trade_time DESC LIMIT $2
+        """, symbol, limit)
     if not rows:
         return None
     df = pd.DataFrame(rows, columns=["side", "quantity", "trade_time"])
@@ -93,16 +88,15 @@ def _fetch_liquidations_timeseries(symbol, limit):
     return df.sort_values("trade_time").reset_index(drop=True)
 
 
-def _fetch_agg_trades_timeseries(symbol, limit):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT price, quantity, is_buyer_mm, trade_time
-                FROM agg_trades
-                WHERE symbol = %s
-                ORDER BY trade_time DESC LIMIT %s
-            """, (symbol, limit))
-            rows = cur.fetchall()
+async def fetch_agg_trades(symbol, limit):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT price, quantity, is_buyer_mm, trade_time
+            FROM agg_trades
+            WHERE symbol = $1
+            ORDER BY trade_time DESC LIMIT $2
+        """, symbol, limit)
     if not rows:
         return None
     df = pd.DataFrame(rows, columns=["price", "quantity", "is_buyer_mm", "trade_time"])
@@ -112,19 +106,18 @@ def _fetch_agg_trades_timeseries(symbol, limit):
     return df.sort_values("trade_time").reset_index(drop=True)
 
 
-def _fetch_real_labels(symbol: str) -> dict:
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT created_at, status
-                FROM trade_outcomes
-                WHERE pair = %s AND status IN ('WIN', 'LOSS', 'NEUTRAL')
-            """, (symbol,))
-            rows = cur.fetchall()
+async def fetch_real_labels(symbol: str) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT created_at, status
+            FROM trade_outcomes
+            WHERE pair = $1 AND status IN ('WIN', 'LOSS', 'NEUTRAL')
+        """, symbol)
     mapping = {}
-    for created_at, status in rows:
-        label = 0 if status == "WIN" else (1 if status == "LOSS" else 2)
-        mapping[int(created_at)] = label
+    for row in rows:
+        label = 0 if row["status"] == "WIN" else (1 if row["status"] == "LOSS" else 2)
+        mapping[int(row["created_at"])] = label
     return mapping
 
 
@@ -150,7 +143,7 @@ def _align_oi_to_candles(df, oi_df):
     for i, ot in enumerate(df["open_time"].values):
         idx = np.searchsorted(oi_times, ot, side="right") - 1
         if idx >= 4:
-            change   = (oi_values[idx] - oi_values[idx - 4]) / (oi_values[idx - 4] + 1e-9)
+            change    = (oi_values[idx] - oi_values[idx - 4]) / (oi_values[idx - 4] + 1e-9)
             result[i] = float(np.clip(change, -1.0, 1.0))
     return result
 
@@ -192,7 +185,7 @@ def _align_agg_trades_to_candles(df, agg_df, candle_ms=300000):
     return large_trade_ratio_arr, buy_aggression_arr
 
 
-def _compute_features(df, cvd_df, funding_df, oi_df, liq_df, agg_df):
+def compute_features(df, cvd_df, funding_df, oi_df, liq_df, agg_df):
     n        = len(df)
     features = pd.DataFrame(index=df.index)
 
@@ -213,12 +206,12 @@ def _compute_features(df, cvd_df, funding_df, oi_df, liq_df, agg_df):
         features["delta_norm"] = 0.0
         features["cvd_accel"]  = 0.0
 
-    features["funding"]          = _align_funding_to_candles(df, funding_df)
-    features["oi_change"]        = _align_oi_to_candles(df, oi_df)
+    features["funding"]         = _align_funding_to_candles(df, funding_df)
+    features["oi_change"]       = _align_oi_to_candles(df, oi_df)
 
-    long_liq, short_liq          = _align_liquidations_to_candles(df, liq_df)
-    features["long_liq_ratio"]   = long_liq
-    features["short_liq_ratio"]  = short_liq
+    long_liq, short_liq         = _align_liquidations_to_candles(df, liq_df)
+    features["long_liq_ratio"]  = long_liq
+    features["short_liq_ratio"] = short_liq
 
     large_trade_ratio, buy_aggression = _align_agg_trades_to_candles(df, agg_df)
     features["large_trade_ratio"] = large_trade_ratio
@@ -227,75 +220,27 @@ def _compute_features(df, cvd_df, funding_df, oi_df, liq_df, agg_df):
     return features.fillna(0.0)
 
 
-def build_sequences(symbol, interval=INTERVAL, window=WINDOW, limit=1000):
-    df      = _fetch_ohlcv(symbol, interval, limit)
-    cvd_df  = _fetch_cvd(symbol, interval, limit)
-    fund_df = _fetch_funding(symbol, limit=200)
-    oi_df   = _fetch_oi(symbol, interval, limit=200)
-    liq_df  = _fetch_liquidations_timeseries(symbol, limit=2000)
-    agg_df  = _fetch_agg_trades_timeseries(symbol, limit=10000)
-
-    if df is None or len(df) < window + 10:
-        return None, None
-
-    features   = _compute_features(df, cvd_df, fund_df, oi_df, liq_df, agg_df)
-    arr        = features.values.astype(np.float32)
-    closes     = df["close"].values
-    open_times = df["open_time"].values
-    real_labels = _fetch_real_labels(symbol)
-
-    symbol_vol       = float(np.std(np.diff(closes) / (closes[:-1] + 1e-9)))
-    trending_thresh  = symbol_vol * 1.5
-    volatile_thresh  = symbol_vol * 1.0
-
-    X, y     = [], []
-    fwd_window = 8
-
-    for i in range(window, len(arr) - fwd_window):
-        X.append(arr[i - window:i])
-        ts = int(open_times[i])
-
-        if ts in real_labels:
-            y.append(real_labels[ts])
-            continue
-
-        fwd_closes  = closes[i:i + fwd_window]
-        fwd_returns = np.diff(fwd_closes) / (fwd_closes[:-1] + 1e-9)
-        fwd_total   = (fwd_closes[-1] - fwd_closes[0]) / (fwd_closes[0] + 1e-9)
-        fwd_std     = float(np.std(fwd_returns))
-        fwd_abs     = float(abs(fwd_total))
-
-        if fwd_abs > trending_thresh and fwd_std < fwd_abs * 2:
-            label = 0
-        elif fwd_std > volatile_thresh and fwd_abs < trending_thresh:
-            label = 2
-        else:
-            label = 1
-
-        y.append(label)
-
-    return np.array(X, dtype=np.float32), np.array(y, dtype=np.int64)
-
-
-def build_live_sequence(symbol, interval=INTERVAL, window=WINDOW):
+async def build_live_sequence(symbol, interval=INTERVAL, window=WINDOW):
     fetch_limit = window + 50
-    df      = _fetch_ohlcv(symbol, interval, fetch_limit)
-    cvd_df  = _fetch_cvd(symbol, interval, fetch_limit)
-    fund_df = _fetch_funding(symbol, limit=50)
-    oi_df   = _fetch_oi(symbol, interval, limit=50)
-    liq_df  = _fetch_liquidations_timeseries(symbol, limit=500)
-    agg_df  = _fetch_agg_trades_timeseries(symbol, limit=2000)
+
+    df, cvd_df, fund_df, oi_df, liq_df, agg_df = await asyncio.gather(
+        fetch_ohlcv(symbol, interval, fetch_limit),
+        fetch_cvd(symbol, interval, fetch_limit),
+        fetch_funding(symbol, limit=50),
+        fetch_oi(symbol, interval, limit=50),
+        fetch_liquidations(symbol, limit=500),
+        fetch_agg_trades(symbol, limit=2000),
+    )
 
     if df is None or len(df) < window:
         return None
 
-    features = _compute_features(df, cvd_df, fund_df, oi_df, liq_df, agg_df)
+    features = compute_features(df, cvd_df, fund_df, oi_df, liq_df, agg_df)
     if len(features) < window:
-        return None
-
-    scaler_path = os.path.join(MODEL_DIR, f"scaler_{symbol}.npy")
-    if not os.path.exists(scaler_path):
         return None
 
     arr = features.values.astype(np.float32)
     return arr[-window:][np.newaxis, :, :].astype(np.float32)
+
+
+import asyncio

@@ -1,7 +1,7 @@
-import time
-from database.connection import get_connection
+import asyncio
+from database.connection import get_pool
 from agent.strategy.arc import ARCStrategy
-from agent.features import _fetch_ohlcv
+from agent.features import fetch_ohlcv
 from agent.reputation import get_reputation_score
 from config import TRAIN_INTERVAL, COLLECT_LOOP_SLEEP
 from logger import get_logger
@@ -17,77 +17,81 @@ DEFAULT_SYMBOLS = [
 ]
 
 
-def seed_symbols():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            for symbol in DEFAULT_SYMBOLS:
-                cur.execute("""
-                    INSERT INTO symbols (symbol, active, intervals, asset_class)
-                    VALUES (%s, TRUE, '{5m,30m}', 'crypto')
-                    ON CONFLICT (symbol) DO NOTHING
-                """, (symbol,))
-            conn.commit()
+async def seed_symbols():
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        for symbol in DEFAULT_SYMBOLS:
+            await conn.execute("""
+                INSERT INTO symbols (symbol, active, intervals, asset_class)
+                VALUES ($1, TRUE, '{5m,30m}', 'crypto')
+                ON CONFLICT (symbol) DO NOTHING
+            """, symbol)
     logger.info(f"[main] seeded {len(DEFAULT_SYMBOLS)} symbols")
 
 
-def get_active_symbols() -> list[str]:
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT symbol FROM symbols WHERE active = TRUE")
-            return [r[0] for r in cur.fetchall()]
+async def get_active_symbols() -> list[str]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT symbol FROM symbols WHERE active = TRUE")
+        return [r["symbol"] for r in rows]
 
 
-def get_current_price(symbol: str) -> float | None:
-    df = _fetch_ohlcv(symbol, TRAIN_INTERVAL, 5)
+async def get_current_price(symbol: str) -> float | None:
+    df = await fetch_ohlcv(symbol, TRAIN_INTERVAL, 5)
     if df is None or len(df) == 0:
         return None
     return float(df["close"].iloc[-1])
 
 
-def main():
+async def process_symbol(symbol: str, reputation: float):
+    try:
+        decision = await strategy.analyze(symbol)
+
+        if not decision["ready"]:
+            logger.info(f"[{symbol}] SKIP — {decision['explanation']}")
+            return
+
+        price = await get_current_price(symbol)
+        if price is None:
+            logger.warning(f"[{symbol}] could not fetch current price")
+            return
+
+        result = await strategy.open_position(decision, price, reputation)
+
+        if result["executed"]:
+            logger.info(
+                f"[{symbol}] {decision['action']} executed "
+                f"leverage={decision['leverage']}x "
+                f"risk={decision['risk_pct']}% "
+                f"rr={decision['rr_ratio']} "
+                f"price={price}"
+            )
+        else:
+            logger.warning(f"[{symbol}] execution failed — {result.get('reason')}")
+
+    except Exception as e:
+        logger.error(f"[{symbol}] error: {e}")
+
+
+async def main():
     logger.info("[main] agent starting")
-    seed_symbols()
+    await seed_symbols()
+
     while True:
-        start      = time.time()
-        symbols    = get_active_symbols()
-        reputation = get_reputation_score()
+        start      = asyncio.get_event_loop().time()
+        symbols    = await get_active_symbols()
+        reputation = await get_reputation_score()
 
         if not symbols:
             logger.warning("[main] no active symbols")
-            time.sleep(COLLECT_LOOP_SLEEP)
+            await asyncio.sleep(COLLECT_LOOP_SLEEP)
             continue
 
-        for symbol in symbols:
-            try:
-                decision = strategy.analyze(symbol)
+        await asyncio.gather(*[process_symbol(s, reputation) for s in symbols])
 
-                if not decision["ready"]:
-                    logger.info(f"[{symbol}] SKIP — {decision['explanation']}")
-                    continue
-
-                price = get_current_price(symbol)
-                if price is None:
-                    logger.warning(f"[{symbol}] could not fetch current price")
-                    continue
-
-                result = strategy.open_position(decision, price, reputation)
-
-                if result["executed"]:
-                    logger.info(
-                        f"[{symbol}] {decision['action']} executed "
-                        f"leverage={decision['leverage']}x "
-                        f"risk={decision['risk_pct']}% "
-                        f"rr={decision['rr_ratio']} "
-                        f"price={price}"
-                    )
-                else:
-                    logger.warning(f"[{symbol}] execution failed — {result.get('reason')}")
-
-            except Exception as e:
-                logger.error(f"[{symbol}] error: {e}")
-
-        time.sleep(max(0, COLLECT_LOOP_SLEEP - (time.time() - start)))
+        elapsed = asyncio.get_event_loop().time() - start
+        await asyncio.sleep(max(0, COLLECT_LOOP_SLEEP - elapsed))
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

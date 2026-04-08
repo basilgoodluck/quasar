@@ -1,6 +1,7 @@
+import asyncio
 import time
 from web3 import Web3
-from database.connection import get_connection
+from database.connection import get_pool
 from config import (
     REPUTATION_MIN_TRADES,
     AGENT_ID,
@@ -11,8 +12,7 @@ from config import (
 )
 from logger import get_logger
 
-logger = get_logger(__name__)
-
+logger    = get_logger(__name__)
 _w3       = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
 _registry = None
 _account  = None
@@ -31,15 +31,13 @@ def _get_registry():
 
 def _submit_on_chain(score: float, outcome_ref: bytes, comment: str):
     registry, account = _get_registry()
-    score_int = int(score * 100)  # 0-100
-
     try:
         tx = registry.functions.submitFeedback(
             AGENT_ID,
-            score_int,
+            int(score * 100),
             outcome_ref,
             comment,
-            0,  # feedbackType 0 = self-reported
+            0,
         ).build_transaction({
             "from":     account.address,
             "nonce":    _w3.eth.get_transaction_count(account.address),
@@ -54,42 +52,38 @@ def _submit_on_chain(score: float, outcome_ref: bytes, comment: str):
         logger.error(f"[reputation] on-chain submission failed: {e}")
 
 
-def get_reputation_score() -> float:
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT status, confidence_at_entry
-                FROM trade_outcomes
-                WHERE status IN ('WIN', 'LOSS', 'NEUTRAL')
-                ORDER BY created_at DESC
-                LIMIT 100
-            """)
-            rows = cur.fetchall()
+async def get_reputation_score() -> float:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT status, confidence_at_entry
+            FROM trade_outcomes
+            WHERE status IN ('WIN', 'LOSS', 'NEUTRAL')
+            ORDER BY created_at DESC
+            LIMIT 100
+        """)
 
     if not rows or len(rows) < REPUTATION_MIN_TRADES:
         logger.info(f"[reputation] not enough trades yet ({len(rows) if rows else 0}/{REPUTATION_MIN_TRADES})")
         return 0.0
 
     total    = len(rows)
-    wins     = sum(1 for r in rows if r[0] == "WIN")
+    wins     = sum(1 for r in rows if r["status"] == "WIN")
     win_rate = wins / total
 
-    confident_and_right = sum(1 for r in rows if r[0] == "WIN"  and r[1] >= 0.65)
-    confident_and_wrong = sum(1 for r in rows if r[0] == "LOSS" and r[1] >= 0.65)
-    consistency = confident_and_right / (confident_and_right + confident_and_wrong + 1e-9)
+    confident_and_right = sum(1 for r in rows if r["status"] == "WIN"  and r["confidence_at_entry"] >= 0.65)
+    confident_and_wrong = sum(1 for r in rows if r["status"] == "LOSS" and r["confidence_at_entry"] >= 0.65)
+    consistency         = confident_and_right / (confident_and_right + confident_and_wrong + 1e-9)
 
-    streak_bonus = 0.0
-    streak       = 0
+    streak = 0
     for r in rows:
-        if r[0] == "WIN":
+        if r["status"] == "WIN":
             streak += 1
         else:
             break
-    if streak >= 5:
-        streak_bonus = min(0.1, streak * 0.01)
+    streak_bonus = min(0.1, streak * 0.01) if streak >= 5 else 0.0
 
-    score = (win_rate * 0.6) + (consistency * 0.3) + (streak_bonus * 0.1)
-    score = round(min(1.0, max(0.0, score)), 4)
+    score = round(min(1.0, max(0.0, (win_rate * 0.6) + (consistency * 0.3) + (streak_bonus * 0.1))), 4)
 
     logger.info(
         f"[reputation] score={score} win_rate={win_rate:.2f} "
@@ -98,30 +92,28 @@ def get_reputation_score() -> float:
     return score
 
 
-def save_reputation_snapshot(score: float, outcome_ref: bytes = None):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO reputation_history (agent_id, score, recorded_at)
-                VALUES (%s, %s, %s)
-            """, (AGENT_ID, score, int(time.time())))
-            conn.commit()
+async def save_reputation_snapshot(score: float, outcome_ref: bytes = None):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO reputation_history (agent_id, score, recorded_at)
+            VALUES ($1, $2, $3)
+        """, AGENT_ID, score, int(time.time()))
 
     if outcome_ref is None:
         outcome_ref = bytes(32)
 
-    comment = f"score={score}"
-    _submit_on_chain(score, outcome_ref, comment)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _submit_on_chain, score, outcome_ref, f"score={score}")
 
 
-def get_reputation_history(limit: int = 50) -> list:
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT score, recorded_at
-                FROM reputation_history
-                WHERE agent_id = %s
-                ORDER BY recorded_at DESC
-                LIMIT %s
-            """, (AGENT_ID, limit))
-            return cur.fetchall()
+async def get_reputation_history(limit: int = 50) -> list:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetch("""
+            SELECT score, recorded_at
+            FROM reputation_history
+            WHERE agent_id = $1
+            ORDER BY recorded_at DESC
+            LIMIT $2
+        """, AGENT_ID, limit)
