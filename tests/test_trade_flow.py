@@ -34,14 +34,22 @@ async def test_regime_direction_from_confidence():
         assert result["ready"]
         assert result["regime"] in {"trending", "trending_volatile"}
         assert result["confidence"] > 0.0
+        assert result["trend_direction"] in {"bullish", "bearish"}
+        assert "direction_strength" in result
 
 
 @pytest.mark.asyncio
 async def test_neutral_regime_produces_skip(sample_regime):
-    neutral_regime = {**sample_regime, "regime": "ranging", "confidence": 0.5}
+    neutral_regime = {
+        **sample_regime,
+        "regime":             "ranging",
+        "confidence":         0.5,
+        "trend_direction":    "bearish",
+        "direction_strength": -0.8,
+    }
 
-    with patch("agent.strategy.arc.detect_regime",        new=AsyncMock(return_value=neutral_regime)), \
-         patch("agent.strategy.arc.get_reputation_score", new=AsyncMock(return_value=0.0)), \
+    with patch("agent.strategy.arc.detect_regime",         new=AsyncMock(return_value=neutral_regime)), \
+         patch("agent.strategy.arc.get_reputation_score",  new=AsyncMock(return_value=0.0)), \
          patch("agent.strategy.base.post_skip_checkpoint", return_value={"tx_hash": "0xabc"}):
 
         from agent.strategy.arc import ARCStrategy
@@ -56,20 +64,28 @@ async def test_neutral_regime_produces_skip(sample_regime):
 async def test_full_flow_approved_trade(sample_regime, sample_decision):
     mock_order = {"txid": ["OTXID-TEST123"], "descr": {"order": "buy 0.001 BTCUSDT @ market"}}
 
-    mock_proc        = AsyncMock()
-    mock_proc.returncode = 0
+    mock_proc             = AsyncMock()
+    mock_proc.returncode  = 0
     mock_proc.communicate = AsyncMock(return_value=(json.dumps(mock_order).encode(), b""))
 
-    with patch("agent.strategy.arc.detect_regime",        new=AsyncMock(return_value=sample_regime)), \
-         patch("agent.strategy.arc.get_reputation_score", new=AsyncMock(return_value=0.5)), \
-         patch("agent.strategy.arc.compute_risk",         new=AsyncMock(return_value={"action": "COMPUTE", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "amount_usd": 150.0, "explanation": "kelly=0.1"})), \
-         patch("agent.strategy.arc._price_structure",     new=AsyncMock(return_value={"valid": True, "note": "ok", "price": 65000.0, "high": 66000.0, "low": 64000.0, "position": 0.5})), \
-         patch("agent.strategy.arc._ma_confirmation",     new=AsyncMock(return_value={"above": True, "ma": 64000.0, "note": "price above 20MA"})), \
-         patch("agent.strategy.arc._fisher_confirmation", new=AsyncMock(return_value={"fisher": -1.6, "note": "fisher=-1.6"})), \
+    trending_regime = {
+        **sample_regime,
+        "regime":             "trending",
+        "confidence":         0.6,
+        "trend_direction":    "bullish",
+        "direction_strength": +0.9,
+    }
+
+    with patch("agent.strategy.arc.detect_regime",           new=AsyncMock(return_value=trending_regime)), \
+         patch("agent.strategy.arc.get_reputation_score",    new=AsyncMock(return_value=0.5)), \
+         patch("agent.strategy.arc.compute_risk",            new=AsyncMock(return_value={"action": "COMPUTE", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "amount_usd": 150.0, "explanation": "kelly=0.1"})), \
+         patch("agent.strategy.arc._price_structure",        new=AsyncMock(return_value={"valid": True, "note": "ok", "price": 65000.0, "high": 66000.0, "low": 64000.0, "position": 0.5})), \
+         patch("agent.strategy.arc._ma_confirmation",        new=AsyncMock(return_value={"above": True, "ma": 64000.0, "price": 65000.0, "note": "price above EMA20"})), \
+         patch("agent.strategy.arc._fisher_confirmation",    new=AsyncMock(return_value={"fisher": -1.6, "note": "fisher=-1.6"})), \
          patch("agent.strategy.base._write_pending_outcome", new=AsyncMock()), \
-         patch("agent.strategy.base._ensure_paper_init",  new=AsyncMock()), \
-         patch("contracts.vault.get_available_capital",   return_value=500.0), \
-         patch("asyncio.create_subprocess_exec",          return_value=mock_proc):
+         patch("agent.strategy.base._ensure_paper_init",     new=AsyncMock()), \
+         patch("contracts.vault.get_available_capital",      return_value=500.0), \
+         patch("asyncio.create_subprocess_exec",             return_value=mock_proc):
 
         from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
@@ -87,9 +103,9 @@ async def test_full_flow_approved_trade(sample_regime, sample_decision):
 
 @pytest.mark.asyncio
 async def test_rejected_trade_intent_does_not_execute(sample_decision):
-    with patch("contracts.vault.get_available_capital", return_value=500.0), \
-         patch("agent.strategy.base._ensure_paper_init", new=AsyncMock()), \
-         patch("asyncio.create_subprocess_exec", side_effect=Exception("order rejected")):
+    with patch("contracts.vault.get_available_capital",   return_value=500.0), \
+         patch("agent.strategy.base._ensure_paper_init",  new=AsyncMock()), \
+         patch("asyncio.create_subprocess_exec",          side_effect=Exception("order rejected")):
 
         from agent.strategy.arc import ARCStrategy
         strategy = ARCStrategy()
@@ -116,3 +132,5 @@ async def test_reputation_adjusts_regime_thresholds():
     assert result_low_rep["regime"]  in {"trending", "trending_volatile", "volatile", "ranging"}
     assert result_high_rep["regime"] in {"trending", "trending_volatile", "volatile", "ranging"}
     assert result_high_rep["confidence"] >= result_low_rep["confidence"] - 0.1
+    assert result_low_rep["trend_direction"]  in {"bullish", "bearish"}
+    assert result_high_rep["trend_direction"] in {"bullish", "bearish"}

@@ -47,13 +47,15 @@ def sample_market_data():
 @pytest.fixture
 def sample_regime():
     return {
-        "symbol":     "BTCUSDT",
-        "p_trending": 0.72,
-        "p_ranging":  0.15,
-        "p_volatile": 0.13,
-        "regime":     "trending",
-        "confidence": 0.72,
-        "ready":      True,
+        "symbol":             "BTCUSDT",
+        "p_trending":         0.72,
+        "p_ranging":          0.15,
+        "p_volatile":         0.13,
+        "regime":             "trending",
+        "confidence":         0.72,
+        "trend_direction":    "bullish",
+        "direction_strength": +0.9,
+        "ready":              True,
     }
 
 
