@@ -9,7 +9,6 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-# Only these regimes are tradeable for a trend-following strategy
 TRADEABLE_REGIMES = {"trending", "trending_volatile"}
 
 
@@ -62,15 +61,15 @@ async def _ma_confirmation(symbol: str) -> dict:
     if df is None or len(df) < 21:
         return {"above": None, "ma": None, "price": None, "note": "MA skipped — not enough candles"}
 
-    # EMA-20: faster response, better suited for trending regimes
-    ma      = float(df["close"].ewm(span=20, adjust=False).mean().iloc[-1])
+    typical = (df["high"] + df["low"] + df["close"]) / 3
+    ma      = float(typical.ewm(span=20, adjust=False).mean().iloc[-1])
     current = float(df["close"].iloc[-1])
     above   = current > ma
     diff    = abs(current - ma)
     pct     = (diff / ma) * 100
 
     note = (
-        f"EMA20=${ma:.4f} | current price=${current:.4f} | "
+        f"EMA20(typical)=${ma:.4f} | current price=${current:.4f} | "
         f"price is {'ABOVE' if above else 'BELOW'} EMA by ${diff:.4f} ({pct:.2f}%) | "
         f"LONG requires price > EMA, SHORT requires price < EMA"
     )
@@ -97,23 +96,34 @@ async def _fisher_confirmation(symbol: str) -> dict:
     fisher = 0.5 * np.log((1 + value) / (1 - value))
     last   = float(fisher.iloc[-1])
 
-    if last < -1.5:
-        signal = "OVERSOLD — LONG signal"
-    elif last > 1.5:
-        signal = "OVERBOUGHT — SHORT signal"
+    # Trend following signal
+    trend_long  = last < 0    # negative = moving down = pullback in uptrend
+    trend_short = last > 0    # positive = moving up = bounce in downtrend
+
+    # Pullback/reversal signal (stronger confirmation)
+    reversal_long  = last < -1.5
+    reversal_short = last > +1.5
+
+    if reversal_long:
+        signal = "OVERSOLD REVERSAL — strong LONG signal"
+    elif reversal_short:
+        signal = "OVERBOUGHT REVERSAL — strong SHORT signal"
+    elif trend_long:
+        signal = "negative — trend-following LONG signal"
+    elif trend_short:
+        signal = "positive — trend-following SHORT signal"
     else:
-        needed_long  = round(-1.5 - last, 4)
-        needed_short = round(last - 1.5, 4)
-        signal = (
-            f"NEUTRAL — needs {needed_long:.4f} more to trigger LONG (<-1.5) "
-            f"or {needed_short:.4f} more to trigger SHORT (>+1.5)"
-        )
+        signal = "neutral"
 
     note = f"Fisher={last:.4f} ({signal})"
 
     return {
-        "fisher": round(last, 4),
-        "note":   note,
+        "fisher":          round(last, 4),
+        "trend_long":      trend_long,
+        "trend_short":     trend_short,
+        "reversal_long":   reversal_long,
+        "reversal_short":  reversal_short,
+        "note":            note,
     }
 
 
@@ -144,14 +154,12 @@ class ARCStrategy(BaseStrategy):
             f"trend_direction={trend_direction}({direction_strength:+.4f})"
         )
 
-        # Only trend-following regimes are tradeable — ranging and pure volatile are blocked
         if current_regime not in TRADEABLE_REGIMES:
             reason = {
                 "ranging":  "market is ranging — no directional edge",
                 "volatile": (
-                    "pure volatile regime — order flow is chaotic (CVD flipping), "
-                    "no trend anchor, ARC strategy has no edge here. "
-                    "Would only trade volatile if trending component is also present (trending_volatile)"
+                    f"pure volatile regime — order flow is chaotic, "
+                    f"no trend anchor, ARC strategy has no edge here"
                 ),
             }.get(current_regime, f"regime '{current_regime}' is not tradeable")
 
@@ -170,9 +178,6 @@ class ARCStrategy(BaseStrategy):
                 confidence=confidence, post_on_chain=True,
             )
 
-        # Gate direction using regime's own trend signal.
-        # Regime already computed direction from CVD, price, aggression, OI slopes —
-        # no point fighting it at the MA/Fisher stage.
         if trend_direction == "bullish":
             allowed_actions = {"LONG"}
         elif trend_direction == "bearish":
@@ -190,38 +195,51 @@ class ARCStrategy(BaseStrategy):
                 confidence=confidence, post_on_chain=True,
             )
 
-        if "LONG" in allowed_actions and ma["above"] and fisher["fisher"] < -1.5:
-            direction = "long"
-            action    = "LONG"
-        elif "SHORT" in allowed_actions and not ma["above"] and fisher["fisher"] > 1.5:
-            direction = "short"
-            action    = "SHORT"
-        else:
-            long_blocked_by  = []
-            short_blocked_by = []
+        # Determine entry type:
+        # Reversal (stronger): Fisher extreme + price on correct side of EMA
+        # Trend following: Fisher agrees with direction + price on correct side of EMA
+        action    = None
+        direction = None
+        entry_type = None
+
+        if "LONG" in allowed_actions and ma["above"]:
+            if fisher["reversal_long"]:
+                action, direction, entry_type = "LONG", "long", "reversal"
+            elif fisher["trend_long"]:
+                action, direction, entry_type = "LONG", "long", "trend"
+
+        elif "SHORT" in allowed_actions and not ma["above"]:
+            if fisher["reversal_short"]:
+                action, direction, entry_type = "SHORT", "short", "reversal"
+            elif fisher["trend_short"]:
+                action, direction, entry_type = "SHORT", "short", "trend"
+
+        if action is None:
+            long_blocked  = []
+            short_blocked = []
 
             if "LONG" not in allowed_actions:
-                long_blocked_by.append(f"regime trend is {trend_direction} — LONG not allowed")
+                long_blocked.append(f"regime trend is {trend_direction} — LONG not allowed")
             else:
                 if not ma["above"]:
-                    long_blocked_by.append(f"price ${ma['price']:.4f} is below EMA20 ${ma['ma']:.4f} — needs to be above")
-                if fisher["fisher"] >= -1.5:
-                    long_blocked_by.append(f"Fisher={fisher['fisher']:.4f} not oversold enough (needs < -1.5)")
+                    long_blocked.append(f"price ${ma['price']:.4f} is below EMA20 ${ma['ma']:.4f}")
+                if not fisher["trend_long"]:
+                    long_blocked.append(f"Fisher={fisher['fisher']:.4f} is positive — not pointing down for pullback")
 
             if "SHORT" not in allowed_actions:
-                short_blocked_by.append(f"regime trend is {trend_direction} — SHORT not allowed")
+                short_blocked.append(f"regime trend is {trend_direction} — SHORT not allowed")
             else:
                 if ma["above"]:
-                    short_blocked_by.append(f"price ${ma['price']:.4f} is above EMA20 ${ma['ma']:.4f} — needs to be below")
-                if fisher["fisher"] <= 1.5:
-                    short_blocked_by.append(f"Fisher={fisher['fisher']:.4f} not overbought enough (needs > +1.5)")
+                    short_blocked.append(f"price ${ma['price']:.4f} is above EMA20 ${ma['ma']:.4f}")
+                if not fisher["trend_short"]:
+                    short_blocked.append(f"Fisher={fisher['fisher']:.4f} is negative — not pointing up for bounce")
 
             return self.skip(
                 symbol,
                 (
                     f"SKIP {symbol}: {regime_summary} — no valid entry. "
-                    f"LONG blocked: {'; '.join(long_blocked_by)}. "
-                    f"SHORT blocked: {'; '.join(short_blocked_by)}."
+                    f"LONG blocked: {'; '.join(long_blocked)}. "
+                    f"SHORT blocked: {'; '.join(short_blocked)}."
                 ),
                 confidence=confidence, post_on_chain=True,
             )
@@ -231,14 +249,14 @@ class ARCStrategy(BaseStrategy):
             return self.skip(
                 symbol,
                 (
-                    f"SKIP {symbol}: {regime_summary} | action={action} blocked by structure: "
-                    f"{structure['note']}"
+                    f"SKIP {symbol}: {regime_summary} | action={action} entry_type={entry_type} "
+                    f"blocked by structure: {structure['note']}"
                 ),
                 confidence=confidence, post_on_chain=True,
             )
 
         explanation = (
-            f"TRADE {symbol} {action}: {regime_summary} | "
+            f"TRADE {symbol} {action} ({entry_type}): {regime_summary} | "
             f"reputation={reputation:.4f} | "
             f"{params['explanation']} | "
             f"leverage={params['leverage']}x risk={params['risk_pct']:.4f} rr={params['rr_ratio']} "
@@ -251,6 +269,7 @@ class ARCStrategy(BaseStrategy):
         return {
             "symbol":      symbol,
             "action":      action,
+            "entry_type":  entry_type,
             "leverage":    params["leverage"],
             "risk_pct":    params["risk_pct"],
             "rr_ratio":    params["rr_ratio"],
