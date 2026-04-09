@@ -149,9 +149,9 @@ class ARCStrategy(BaseStrategy):
             reason = {
                 "ranging":  "market is ranging — no directional edge",
                 "volatile": (
-                    f"pure volatile regime — order flow is chaotic (CVD flipping), "
-                    f"no trend anchor, ARC strategy has no edge here. "
-                    f"Would only trade volatile if trending component is also present (trending_volatile)"
+                    "pure volatile regime — order flow is chaotic (CVD flipping), "
+                    "no trend anchor, ARC strategy has no edge here. "
+                    "Would only trade volatile if trending component is also present (trending_volatile)"
                 ),
             }.get(current_regime, f"regime '{current_regime}' is not tradeable")
 

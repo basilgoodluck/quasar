@@ -110,7 +110,7 @@ def _score_window(seq: np.ndarray) -> tuple[float, float, float, str, float]:
     direction_score += (avg_buy_ratio - 0.5) * 2.0
 
     # Normalise to [-1, 1] for readability
-    max_possible = 3.0 + 2.0 + 2.0 + 1.0 + 1.0  # rough upper bound per unit slope
+    # max_possible = 3.0 + 2.0 + 2.0 + 1.0 + 1.0  # rough upper bound per unit slope
     direction_strength = float(np.clip(direction_score / (abs(direction_score) + 1e-9), -1, 1))
 
     trend_direction = "bullish" if direction_score > 0 else "bearish"
