@@ -47,20 +47,24 @@ async def _ensure_paper_init():
         proc = await asyncio.create_subprocess_exec(
             KRAKEN_CLI_PATH, "futures", "paper", "status", "-o", "json",
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
-        await proc.communicate()
+        stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            raise Exception("not initialized")
-    except Exception:
+            raise Exception(f"status check failed: {stderr.decode()}")
+    except Exception as e:
+        logger.warning(f"[paper] status check failed, attempting init: {e}")
         try:
             proc = await asyncio.create_subprocess_exec(
                 KRAKEN_CLI_PATH, "futures", "paper", "init", "--balance", "10000", "-o", "json",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            await proc.communicate()
-            logger.info("[paper] paper account initialised with $10,000")
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                logger.error(f"[paper] init failed stdout={stdout.decode()} stderr={stderr.decode()}")
+            else:
+                logger.info("[paper] paper account initialised with $10,000")
         except Exception as e:
             logger.error(f"[paper] init failed: {e}")
 
@@ -93,21 +97,19 @@ class BaseStrategy(ABC):
 
         if KRAKEN_PAPER_MODE:
             await _ensure_paper_init()
-            base = [KRAKEN_CLI_PATH, "futures", "paper"]
+            cmd = [KRAKEN_CLI_PATH, "futures", "paper", side, pair, volume, "--leverage", str(leverage), "-o", "json"]
         else:
-            base = [KRAKEN_CLI_PATH, "futures", "order"]
-
-        cmd = base + [side, pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
+            cmd = [KRAKEN_CLI_PATH, "futures", "order", side, pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await proc.communicate()
+        stdout, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            raise Exception(stdout.decode())
+            raise Exception(f"stdout={stdout.decode()} stderr={stderr.decode()}")
 
         return json.loads(stdout)
 
@@ -202,9 +204,12 @@ class BaseStrategy(ABC):
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
+            stdout, stderr = await proc.communicate()
+            if not stdout:
+                logger.error(f"get_open_orders failed stderr={stderr.decode()}")
+                return {}
             return json.loads(stdout)
         except Exception as e:
             logger.error(f"get_open_orders failed: {e}")
@@ -217,9 +222,12 @@ class BaseStrategy(ABC):
             proc = await asyncio.create_subprocess_exec(
                 KRAKEN_CLI_PATH, "futures", "paper", "status", "-o", "json",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
+            stdout, stderr = await proc.communicate()
+            if not stdout:
+                logger.error(f"get_paper_status failed stderr={stderr.decode()}")
+                return {}
             return json.loads(stdout)
         except Exception as e:
             logger.error(f"get_paper_status failed: {e}")
