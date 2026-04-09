@@ -81,7 +81,7 @@ async def test_full_flow_approved_trade(sample_regime, sample_decision):
          patch("agent.strategy.arc.compute_risk",            new=AsyncMock(return_value={"action": "COMPUTE", "leverage": 3.0, "risk_pct": 1.0, "rr_ratio": 2.5, "amount_usd": 150.0, "explanation": "kelly=0.1"})), \
          patch("agent.strategy.arc._price_structure",        new=AsyncMock(return_value={"valid": True, "note": "ok", "price": 65000.0, "high": 66000.0, "low": 64000.0, "position": 0.5})), \
          patch("agent.strategy.arc._ma_confirmation",        new=AsyncMock(return_value={"above": True, "ma": 64000.0, "price": 65000.0, "note": "price above EMA20"})), \
-         patch("agent.strategy.arc._fisher_confirmation",    new=AsyncMock(return_value={"fisher": -1.6, "note": "fisher=-1.6"})), \
+         patch("agent.strategy.arc._fisher_confirmation",    new=AsyncMock(return_value={"fisher": -1.6, "fisher_min": -1.8, "fisher_max": 1.2, "trend_long": True, "trend_short": False, "reversal_long": False, "reversal_short": False, "note": "fisher=-1.6"})), \
          patch("agent.strategy.base._write_pending_outcome", new=AsyncMock()), \
          patch("agent.strategy.base._ensure_paper_init",     new=AsyncMock()), \
          patch("contracts.vault.get_available_capital",      return_value=500.0), \
