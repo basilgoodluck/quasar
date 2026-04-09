@@ -1,4 +1,5 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+// lib/api.ts
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:7052"
 const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK === "true"
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"

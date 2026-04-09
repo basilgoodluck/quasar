@@ -1,7 +1,6 @@
 web3
 eth_account
 python-dotenv
-torch
 numpy
 pandas
 aiohttp
