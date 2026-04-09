@@ -10,7 +10,7 @@ TRENDING_THRESHOLD = float(os.getenv("TRENDING_THRESHOLD", "0.45"))
 VOLATILE_THRESHOLD = float(os.getenv("VOLATILE_THRESHOLD", "0.40"))
 
 
-def _score_window(seq: np.ndarray) -> tuple[float, float, float]:
+def _score_window(seq: np.ndarray) -> tuple[float, float, float, str, float]:
     arr = seq[0]
 
     log_return      = arr[:, 0]
@@ -94,7 +94,34 @@ def _score_window(seq: np.ndarray) -> tuple[float, float, float]:
     p_volatile = volatile_score / total
     p_ranging  = ranging_score  / total
 
-    return round(float(p_trending), 4), round(float(p_ranging), 4), round(float(p_volatile), 4)
+    # --- Trend direction ---
+    # Weighted vote from four signed slope signals.
+    # Each signal contributes its sign weighted by its magnitude.
+    # cvd_slope is most reliable (order flow), ret_slope is price confirmation,
+    # agg_slope is aggression confirmation, oi_slope is positioning.
+    direction_score = (
+        cvd_slope * 3.0 +
+        ret_slope * 2.0 +
+        agg_slope * 2.0 +
+        oi_slope  * 1.0
+    )
+
+    # Also factor in avg buy_ratio: >0.5 = more buying, <0.5 = more selling
+    direction_score += (avg_buy_ratio - 0.5) * 2.0
+
+    # Normalise to [-1, 1] for readability
+    max_possible = 3.0 + 2.0 + 2.0 + 1.0 + 1.0  # rough upper bound per unit slope
+    direction_strength = float(np.clip(direction_score / (abs(direction_score) + 1e-9), -1, 1))
+
+    trend_direction = "bullish" if direction_score > 0 else "bearish"
+
+    return (
+        round(float(p_trending), 4),
+        round(float(p_ranging),  4),
+        round(float(p_volatile), 4),
+        trend_direction,
+        round(direction_strength, 4),
+    )
 
 
 async def detect_regime(symbol: str, reputation: float = 0.0) -> dict:
@@ -103,16 +130,18 @@ async def detect_regime(symbol: str, reputation: float = 0.0) -> dict:
     if seq is None:
         logger.warning(f"[{symbol}] not enough data for regime inference")
         return {
-            "symbol":     symbol,
-            "p_trending": 0.0,
-            "p_ranging":  1.0,
-            "p_volatile": 0.0,
-            "regime":     "ranging",
-            "confidence": 0.0,
-            "ready":      False,
+            "symbol":           symbol,
+            "p_trending":       0.0,
+            "p_ranging":        1.0,
+            "p_volatile":       0.0,
+            "regime":           "ranging",
+            "confidence":       0.0,
+            "trend_direction":  "unknown",
+            "direction_strength": 0.0,
+            "ready":            False,
         }
 
-    p_trending, p_ranging, p_volatile = _score_window(seq)
+    p_trending, p_ranging, p_volatile, trend_direction, direction_strength = _score_window(seq)
 
     boost              = reputation * REPUTATION_CONFIDENCE_BOOST
     trending_threshold = max(0.35, TRENDING_THRESHOLD - boost)
@@ -133,15 +162,18 @@ async def detect_regime(symbol: str, reputation: float = 0.0) -> dict:
 
     logger.info(
         f"[{symbol}] p_trending={p_trending:.4f} p_ranging={p_ranging:.4f} "
-        f"p_volatile={p_volatile:.4f} regime={regime} confidence={confidence} reputation={reputation:.4f}"
+        f"p_volatile={p_volatile:.4f} regime={regime} confidence={confidence} "
+        f"trend_direction={trend_direction}({direction_strength:+.4f}) reputation={reputation:.4f}"
     )
 
     return {
-        "symbol":     symbol,
-        "p_trending": p_trending,
-        "p_ranging":  p_ranging,
-        "p_volatile": p_volatile,
-        "regime":     regime,
-        "confidence": confidence,
-        "ready":      True,
+        "symbol":             symbol,
+        "p_trending":         p_trending,
+        "p_ranging":          p_ranging,
+        "p_volatile":         p_volatile,
+        "regime":             regime,
+        "confidence":         confidence,
+        "trend_direction":    trend_direction,
+        "direction_strength": direction_strength,
+        "ready":              True,
     }
