@@ -11,6 +11,10 @@ logger = get_logger(__name__)
 
 TRADEABLE_REGIMES = {"trending", "trending_volatile"}
 
+# For reversal confirmation we look back further to verify
+# the extreme is genuine and not just noise
+REVERSAL_LOOKBACK = 100
+
 
 async def _price_structure(symbol: str, direction: str) -> dict:
     df = await fetch_ohlcv(symbol, INTERVAL, STRUCTURE_LOOKBACK + 5)
@@ -83,7 +87,10 @@ async def _ma_confirmation(symbol: str) -> dict:
 
 
 async def _fisher_confirmation(symbol: str) -> dict:
-    df = await fetch_ohlcv(symbol, INTERVAL, ARC_FISHER_PERIOD + 10)
+    # Fetch enough candles for both trend (ARC_FISHER_PERIOD)
+    # and reversal confirmation (REVERSAL_LOOKBACK)
+    fetch_count = max(ARC_FISHER_PERIOD, REVERSAL_LOOKBACK) + 10
+    df = await fetch_ohlcv(symbol, INTERVAL, fetch_count)
     if df is None or len(df) < ARC_FISHER_PERIOD:
         return {"fisher": None, "note": "Fisher skipped — not enough candles"}
 
@@ -96,34 +103,55 @@ async def _fisher_confirmation(symbol: str) -> dict:
     fisher = 0.5 * np.log((1 + value) / (1 - value))
     last   = float(fisher.iloc[-1])
 
-    # Trend following signal
-    trend_long  = last < 0    # negative = moving down = pullback in uptrend
-    trend_short = last > 0    # positive = moving up = bounce in downtrend
+    # For reversal confirmation: check how extreme this Fisher reading is
+    # relative to the last REVERSAL_LOOKBACK candles.
+    # If Fisher < -1.5 AND it is at or near the lowest Fisher reading
+    # over the lookback, the oversold condition is genuine.
+    # Same for overbought.
+    fisher_window  = fisher.iloc[-REVERSAL_LOOKBACK:]
+    fisher_min     = float(fisher_window.min())
+    fisher_max     = float(fisher_window.max())
 
-    # Pullback/reversal signal (stronger confirmation)
-    reversal_long  = last < -1.5
-    reversal_short = last > +1.5
+    # Reversal is confirmed if current Fisher is within 10% of the
+    # historical extreme over the lookback window
+    reversal_long  = last < -1.5 and last <= fisher_min * 0.9
+    reversal_short = last > +1.5 and last >= fisher_max * 0.9
+
+    # Trend following: Fisher just needs to agree with direction
+    trend_long  = last < 0
+    trend_short = last > 0
 
     if reversal_long:
-        signal = "OVERSOLD REVERSAL — strong LONG signal"
+        signal = (
+            f"OVERSOLD REVERSAL confirmed — Fisher={last:.4f} at/near "
+            f"{REVERSAL_LOOKBACK}-candle low of {fisher_min:.4f}"
+        )
     elif reversal_short:
-        signal = "OVERBOUGHT REVERSAL — strong SHORT signal"
+        signal = (
+            f"OVERBOUGHT REVERSAL confirmed — Fisher={last:.4f} at/near "
+            f"{REVERSAL_LOOKBACK}-candle high of {fisher_max:.4f}"
+        )
     elif trend_long:
-        signal = "negative — trend-following LONG signal"
+        signal = f"negative ({last:.4f}) — trend-following LONG signal"
     elif trend_short:
-        signal = "positive — trend-following SHORT signal"
+        signal = f"positive ({last:.4f}) — trend-following SHORT signal"
     else:
         signal = "neutral"
 
-    note = f"Fisher={last:.4f} ({signal})"
+    note = (
+        f"Fisher={last:.4f} ({signal}) | "
+        f"{REVERSAL_LOOKBACK}-candle range [{fisher_min:.4f} to {fisher_max:.4f}]"
+    )
 
     return {
-        "fisher":          round(last, 4),
-        "trend_long":      trend_long,
-        "trend_short":     trend_short,
-        "reversal_long":   reversal_long,
-        "reversal_short":  reversal_short,
-        "note":            note,
+        "fisher":         round(last, 4),
+        "fisher_min":     round(fisher_min, 4),
+        "fisher_max":     round(fisher_max, 4),
+        "trend_long":     trend_long,
+        "trend_short":    trend_short,
+        "reversal_long":  reversal_long,
+        "reversal_short": reversal_short,
+        "note":           note,
     }
 
 
@@ -178,13 +206,6 @@ class ARCStrategy(BaseStrategy):
                 confidence=confidence, post_on_chain=True,
             )
 
-        if trend_direction == "bullish":
-            allowed_actions = {"LONG"}
-        elif trend_direction == "bearish":
-            allowed_actions = {"SHORT"}
-        else:
-            allowed_actions = {"LONG", "SHORT"}
-
         ma     = await _ma_confirmation(symbol)
         fisher = await _fisher_confirmation(symbol)
 
@@ -195,51 +216,36 @@ class ARCStrategy(BaseStrategy):
                 confidence=confidence, post_on_chain=True,
             )
 
-        # Determine entry type:
-        # Reversal (stronger): Fisher extreme + price on correct side of EMA
-        # Trend following: Fisher agrees with direction + price on correct side of EMA
-        action    = None
-        direction = None
+        action     = None
+        direction  = None
         entry_type = None
 
-        if "LONG" in allowed_actions and ma["above"]:
-            if fisher["reversal_long"]:
-                action, direction, entry_type = "LONG", "long", "reversal"
-            elif fisher["trend_long"]:
-                action, direction, entry_type = "LONG", "long", "trend"
+        # --- REVERSAL entries (regime gate lifted) ---
+        # Fisher at multi-candle extreme overrides regime direction.
+        # Checked first because it is a stronger signal.
+        if fisher["reversal_long"] and not ma["above"]:
+            # Price below EMA (still in downtrend) but Fisher
+            # is at an extreme low — genuine oversold reversal
+            action, direction, entry_type = "LONG", "long", "reversal"
 
-        elif "SHORT" in allowed_actions and not ma["above"]:
-            if fisher["reversal_short"]:
-                action, direction, entry_type = "SHORT", "short", "reversal"
-            elif fisher["trend_short"]:
-                action, direction, entry_type = "SHORT", "short", "trend"
+        elif fisher["reversal_short"] and ma["above"]:
+            # Price above EMA (still in uptrend) but Fisher
+            # is at an extreme high — genuine overbought reversal
+            action, direction, entry_type = "SHORT", "short", "reversal"
+
+        # --- TREND FOLLOWING entries (regime gates direction) ---
+        elif trend_direction == "bullish" and ma["above"] and fisher["trend_long"]:
+            action, direction, entry_type = "LONG", "long", "trend"
+
+        elif trend_direction == "bearish" and not ma["above"] and fisher["trend_short"]:
+            action, direction, entry_type = "SHORT", "short", "trend"
 
         if action is None:
-            long_blocked  = []
-            short_blocked = []
-
-            if "LONG" not in allowed_actions:
-                long_blocked.append(f"regime trend is {trend_direction} — LONG not allowed")
-            else:
-                if not ma["above"]:
-                    long_blocked.append(f"price ${ma['price']:.4f} is below EMA20 ${ma['ma']:.4f}")
-                if not fisher["trend_long"]:
-                    long_blocked.append(f"Fisher={fisher['fisher']:.4f} is positive — not pointing down for pullback")
-
-            if "SHORT" not in allowed_actions:
-                short_blocked.append(f"regime trend is {trend_direction} — SHORT not allowed")
-            else:
-                if ma["above"]:
-                    short_blocked.append(f"price ${ma['price']:.4f} is above EMA20 ${ma['ma']:.4f}")
-                if not fisher["trend_short"]:
-                    short_blocked.append(f"Fisher={fisher['fisher']:.4f} is negative — not pointing up for bounce")
-
             return self.skip(
                 symbol,
                 (
                     f"SKIP {symbol}: {regime_summary} — no valid entry. "
-                    f"LONG blocked: {'; '.join(long_blocked)}. "
-                    f"SHORT blocked: {'; '.join(short_blocked)}."
+                    f"{ma['note']} | {fisher['note']}"
                 ),
                 confidence=confidence, post_on_chain=True,
             )
