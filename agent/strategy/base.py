@@ -92,14 +92,18 @@ class BaseStrategy(ABC):
     async def analyze(self, symbol: str) -> dict:
         ...
 
-    async def _exec(self, side: str, pair: str, volume: str, leverage: float, order_type: str = "market") -> dict:
+    async def _exec(self, side: str, pair: str, volume: str, leverage: float, order_type: str = "market", price: float | None = None) -> dict:
         pair = _pf(pair)
 
         if KRAKEN_PAPER_MODE:
             await _ensure_paper_init()
-            cmd = [KRAKEN_CLI_PATH, "futures", "paper", side, pair, volume, "--leverage", str(leverage), "-o", "json"]
+            cmd = [KRAKEN_CLI_PATH, "futures", "paper", side, pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
+            if price is not None:
+                cmd += ["--price", str(price)]
         else:
             cmd = [KRAKEN_CLI_PATH, "futures", "order", side, pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
+            if price is not None:
+                cmd += ["--price", str(price)]
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -138,7 +142,8 @@ class BaseStrategy(ABC):
         side = "buy" if action == "LONG" else "sell"
 
         try:
-            order = await self._exec(side, pair, volume, leverage, order_type)
+            limit_price = price if order_type != "market" else None
+            order = await self._exec(side, pair, volume, leverage, order_type, price=limit_price)
             logger.info(f"[{pair}] {'[PAPER] ' if KRAKEN_PAPER_MODE else ''}order placed: {order}")
 
             if not KRAKEN_PAPER_MODE:

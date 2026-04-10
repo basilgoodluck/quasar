@@ -1,0 +1,49 @@
+{
+  "terminalLines": [
+    { "color": "text-blue-600", "text": "[03:12:44] AGENT quasar-01 ONLINE" },
+    { "color": "text-gray-500", "text": "[03:12:45] regime=BULL confidence=0.81" },
+    { "color": "text-purple-500", "text": "[03:12:46] signal=BUY pair=BTCUSDT rsi=38.2" },
+    { "color": "text-blue-400", "text": "[03:12:47] intent signed nonce=412" },
+    { "color": "text-blue-600", "text": "[03:12:48] RiskRouter → APPROVED hash=0x3f9a...c12e" },
+    { "color": "text-gray-900", "text": "[03:12:49] order FILLED entry=83,241 size=0.024 BTC" },
+    { "color": "text-blue-600", "text": "[03:14:11] outcome=WIN exit=84,190 pnl=+$22.78" }
+  ],
+  "heroWords": ["Verifiable", "On-Chain", "Auditable", "Deterministic"],
+  "heroStats": [
+    { "value": "ERC-8004", "label": "Identity" },
+    { "value": "EIP-712", "label": "Signatures" },
+    { "value": "100%", "label": "Auditable" }
+  ],
+  "howItWorksSteps": [
+    { "number": "01", "title": "Register Agent", "description": "Mint ERC-721 via AgentRegistry to receive a persistent agentId as on-chain identity." },
+    { "number": "02", "title": "Strategy Runs", "description": "Rule-based engine reads live market data, computes RSI / Stoch RSI, emits a TradeDecision." },
+    { "number": "03", "title": "Sign Intent", "description": "TradeIntent structured and signed by agentWallet using EIP-712 before any action." },
+    { "number": "04", "title": "On-Chain Validation", "description": "RiskRouter smart contract verifies position size, drawdown limits, and frequency constraints." },
+    { "number": "05", "title": "Execute & Record", "description": "Kraken CLI executes only on APPROVED. Checkpoint written on-chain with full audit trail." }
+  ],
+  "features": [
+    "ERC-8004 On-Chain Identity",
+    "EIP-712 Signed Decisions",
+    "RiskRouter Enforcement",
+    "Cryptographic Audit Trail",
+    "Regime Filtering",
+    "Explainability Layer"
+  ],
+  "whyQuasarReasons": [
+    { "icon": "Shield", "title": "Verifiable Identity", "description": "Agent registered via ERC-8004. Persistent agentId as NFT. Every action is attributable — no anonymous bots." },
+    { "icon": "Zap", "title": "Enforced Risk", "description": "RiskRouter smart contract is the final gate. Position size, drawdown, and frequency validated on-chain before execution." },
+    { "icon": "Eye", "title": "Full Explainability", "description": "Every decision includes regime state, indicator values, confidence score, and reasoning. Nothing is hidden." }
+  ],
+  "contracts": [
+    { "label": "AgentRegistry", "address": "0x97b07dD...32d0ca3", "href": "https://sepolia.etherscan.io/address/0x97b07dDc405B0c28B17559aFFE63BdB3632d0ca3" },
+    { "label": "RiskRouter", "address": "0xd6A695...40FdBC", "href": "https://sepolia.etherscan.io/address/0xd6A6952545FF6E6E6681c2d15C59f9EB8F40FdBC" },
+    { "label": "HackathonVault", "address": "0x0E7CD8...45fC90", "href": "https://sepolia.etherscan.io/address/0x0E7CD8ef9743FEcf94f9103033a044caBD45fC90" },
+    { "label": "Validation", "address": "0x92bF63...87F1", "href": "https://sepolia.etherscan.io/address/0x92bF63E5C7Ac6980f237a7164Ab413BE226187F1" }
+  ],
+  "productLinks": [
+    { "text": "Dashboard", "href": "/dashboard" },
+    { "text": "Checkpoints", "href": "/checkpoints" },
+    { "text": "Trades", "href": "/trades" },
+    { "text": "Risk", "href": "/risk" }
+  ]
+}

@@ -17,13 +17,22 @@ import { Trade } from "@/types"
 import { config } from "@/config"
 
 const INTERVAL = "15m"
+const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT"]
 
 type Candle = { time: UTCTimestamp; open: number; high: number; low: number; close: number }
+type DecisionFilter = "all" | "approved" | "rejected" | "skipped"
+type ChartTheme = "light" | "dark"
 
 function decisionColor(d: string) {
   if (d === "approved") return "#22c55e"
   if (d === "rejected") return "#ef4444"
   return "#f59e0b"
+}
+
+function decisionBg(d: string) {
+  if (d === "approved") return "#14532d"
+  if (d === "rejected") return "#450a0a"
+  return "#451a03"
 }
 
 function fmt(n: number, decimals = 2) {
@@ -36,21 +45,22 @@ export default function TradesPage() {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null)
   const markersPluginRef = useRef<any>(null)
-  const priceWsRef = useRef<WebSocket | null>(null)
-  const tradeWsRef = useRef<WebSocket | null>(null)
 
   const [lastPrice, setLastPrice] = useState<number | null>(null)
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT")
-  const [filterDecision, setFilterDecision] = useState<"all" | "approved" | "rejected" | "skipped">("all")
+  const [filterDecision, setFilterDecision] = useState<DecisionFilter>("all")
   const [liveTrades, setLiveTrades] = useState<Trade[]>([])
+  const [chartTheme, setChartTheme] = useState<ChartTheme>("light")
 
-  const filteredTrades = useMemo(() => {
-    return filterDecision === "all" ? liveTrades : liveTrades.filter(t => t.decision === filterDecision)
-  }, [liveTrades, filterDecision])
+  const filteredTrades = useMemo(
+    () => filterDecision === "all" ? liveTrades : liveTrades.filter(t => t.decision === filterDecision),
+    [liveTrades, filterDecision]
+  )
 
-  const symbolTrades = useMemo(() => {
-    return filteredTrades.filter(t => t.symbol === selectedSymbol)
-  }, [filteredTrades, selectedSymbol])
+  const symbolTrades = useMemo(
+    () => filteredTrades.filter(t => t.symbol === selectedSymbol),
+    [filteredTrades, selectedSymbol]
+  )
 
   const buildMarkers = useCallback((tradeList: Trade[]): SeriesMarker<Time>[] => {
     return tradeList
@@ -65,6 +75,7 @@ export default function TradesPage() {
       }))
   }, [])
 
+  // Fetch initial trades
   useEffect(() => {
     api.dashboard.trades()
       .then(setLiveTrades)
@@ -73,20 +84,15 @@ export default function TradesPage() {
       })
   }, [])
 
+  // WebSocket for live trades
   useEffect(() => {
-    const tradeWs = new WebSocket(config.NEXT_PUBLIC_TRADE_WS_URL)
-    tradeWsRef.current = tradeWs
-
-    tradeWs.onmessage = (e) => {
+    const ws = new WebSocket(config.NEXT_PUBLIC_TRADE_WS_URL)
+    ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
-      if (msg.type === "initial") {
-        setLiveTrades(msg.data)
-      } else if (msg.type === "new_trade") {
-        setLiveTrades(prev => [msg.data, ...prev])
-      }
+      if (msg.type === "initial") setLiveTrades(msg.data)
+      else if (msg.type === "new_trade") setLiveTrades(prev => [msg.data, ...prev])
     }
-
-    return () => tradeWs.close()
+    return () => ws.close()
   }, [])
 
   const fetchHistoricalData = useCallback(async (symbol: string) => {
@@ -94,7 +100,6 @@ export default function TradesPage() {
       const raw = await api.get<unknown[][]>(
         `/api/binance-klines?symbol=${symbol}&interval=${INTERVAL}&limit=200`
       )
-
       const candles: Candle[] = raw.map(k => ({
         time: Math.floor(Number(k[0]) / 1000) as UTCTimestamp,
         open: parseFloat(k[1] as string),
@@ -102,78 +107,73 @@ export default function TradesPage() {
         low: parseFloat(k[3] as string),
         close: parseFloat(k[4] as string),
       }))
-
       candleSeriesRef.current?.setData(candles)
       lineSeriesRef.current?.setData(candles.map(c => ({ time: c.time, value: c.close })))
-
       const last = candles[candles.length - 1]
       if (last) setLastPrice(last.close)
-
-      if (markersPluginRef.current) {
-        markersPluginRef.current.setMarkers(buildMarkers(symbolTrades))
-      }
-
+      markersPluginRef.current?.setMarkers(buildMarkers(symbolTrades))
       chartRef.current?.timeScale().fitContent()
     } catch (err) {
       console.error(err)
     }
   }, [buildMarkers, symbolTrades])
 
+  // Price WebSocket
   useEffect(() => {
-    if (priceWsRef.current) {
-      priceWsRef.current.close()
-      priceWsRef.current = null
-    }
-
     const wsUrl = `${config.NEXT_PUBLIC_API_URL.replace(/^http/, "ws")}/ws/binance-stream?symbol=${selectedSymbol.toLowerCase()}&interval=${INTERVAL}`
     const ws = new WebSocket(wsUrl)
-    priceWsRef.current = ws
-
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
       const k = msg.k
       if (!k) return
-
       const candle: Candle = {
         time: Math.floor(k.t / 1000) as UTCTimestamp,
-        open: parseFloat(k.o),
-        high: parseFloat(k.h),
-        low: parseFloat(k.l),
-        close: parseFloat(k.c),
+        open: parseFloat(k.o), high: parseFloat(k.h),
+        low: parseFloat(k.l), close: parseFloat(k.c),
       }
-
       candleSeriesRef.current?.update(candle)
       lineSeriesRef.current?.update({ time: candle.time, value: candle.close })
       setLastPrice(candle.close)
     }
-
-    return () => {
-      ws.close()
-      priceWsRef.current = null
-    }
+    return () => ws.close()
   }, [selectedSymbol])
 
+  // Create Chart with current theme
   useEffect(() => {
     if (!chartContainerRef.current) return
+
+    const isDark = chartTheme === "dark"
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: 420,
-      layout: { background: { color: "#111111" }, textColor: "#71717a", fontSize: 11, fontFamily: "monospace" },
-      grid: { vertLines: { color: "#1a1a1a" }, horzLines: { color: "#1a1a1a" } },
+      layout: { 
+        background: { color: isDark ? "#111111" : "#ffffff" }, 
+        textColor: isDark ? "#a1a1aa" : "#52525b", 
+        fontSize: 11, 
+        fontFamily: "monospace" 
+      },
+      grid: { 
+        vertLines: { color: isDark ? "#1f1f1f" : "#f1f1f1" }, 
+        horzLines: { color: isDark ? "#1f1f1f" : "#f1f1f1" } 
+      },
       crosshair: { mode: 1 },
-      rightPriceScale: { borderColor: "#1f1f1f" },
-      timeScale: { borderColor: "#1f1f1f", timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: isDark ? "#1f1f1f" : "#e5e5e5" },
+      timeScale: { borderColor: isDark ? "#1f1f1f" : "#e5e5e5", timeVisible: true, secondsVisible: false },
     })
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#22c55e", downColor: "#ef4444",
-      borderUpColor: "#22c55e", borderDownColor: "#ef4444",
-      wickUpColor: "#22c55e", wickDownColor: "#ef4444",
+      upColor: "#22c55e", 
+      downColor: "#ef4444",
+      borderUpColor: "#22c55e", 
+      borderDownColor: "#ef4444",
+      wickUpColor: "#22c55e", 
+      wickDownColor: "#ef4444",
     })
 
     const lineSeries = chart.addSeries(LineSeries, {
-      color: "transparent", lineWidth: 0, priceLineVisible: false, lastValueVisible: false,
+      color: isDark ? "#60a5fa" : "#3b82f6",
+      lineWidth: 2,
     })
 
     const markersPlugin = createSeriesMarkers(candleSeries)
@@ -190,16 +190,12 @@ export default function TradesPage() {
     })
     ro.observe(chartContainerRef.current)
 
-    return () => {
-      ro.disconnect()
-      chart.remove()
-    }
-  }, [selectedSymbol])
+    return () => { ro.disconnect(); chart.remove() }
+  }, [chartTheme, selectedSymbol, fetchHistoricalData])
 
+  // Update markers when trades change
   useEffect(() => {
-    if (markersPluginRef.current) {
-      markersPluginRef.current.setMarkers(buildMarkers(symbolTrades))
-    }
+    markersPluginRef.current?.setMarkers(buildMarkers(symbolTrades))
   }, [symbolTrades, buildMarkers])
 
   const hourlyVolume = Array.from({ length: 24 }, (_, h) => ({
@@ -209,79 +205,167 @@ export default function TradesPage() {
 
   const maxVol = hourlyVolume.length ? Math.max(...hourlyVolume.map(h => h.volume)) : 0
 
-  const cell: React.CSSProperties = { padding: "6px 10px", whiteSpace: "nowrap" }
-
   return (
-    <div style={{ padding: "1.25rem", background: "#0a0a0a", minHeight: "100vh" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "8px" }}>
+      {/* Header Row */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <p style={{ fontSize: "11px", fontFamily: "monospace", color: "#52525b", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: "2px" }}>Trade Activity</p>
-          <p style={{ fontSize: "20px", fontWeight: 600, color: "#e4e4e7", fontFamily: "monospace" }}>
-            {lastPrice ? `$${fmt(lastPrice)}` : "—"}
-            <span style={{ fontSize: "12px", color: "#52525b", marginLeft: "8px" }}>{selectedSymbol}</span>
-          </p>
+          <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "4px" }}>
+            TRADE ACTIVITY
+          </div>
+          <div style={{ fontSize: "28px", fontWeight: 700, color: "#111827", margin: 0 }}>
+            {lastPrice ? `$${fmt(lastPrice)}` : "0.0000"}
+            <span style={{ fontSize: "15px", color: "#6b7280", marginLeft: "10px", fontWeight: 500 }}>{selectedSymbol}</span>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <select value={filterDecision} onChange={e => setFilterDecision(e.target.value as any)}
-            style={{ fontSize: "12px", fontFamily: "monospace", padding: "4px 8px", borderRadius: "6px", border: "0.5px solid #1f1f1f", background: "#111111", color: "#e4e4e7" }}>
-            <option value="all">all</option>
-            <option value="approved">approved</option>
-            <option value="rejected">rejected</option>
-            <option value="skipped">skipped</option>
-          </select>
+
+        <select
+          value={filterDecision}
+          onChange={e => setFilterDecision(e.target.value as DecisionFilter)}
+          style={{
+            fontSize: "13px", 
+            padding: "8px 14px",
+            borderRadius: "8px", 
+            border: "1px solid #d1d5db",
+            background: "#ffffff", 
+            color: "#374151", 
+            cursor: "pointer",
+          }}
+        >
+          <option value="all">All Decisions</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="skipped">Skipped</option>
+        </select>
+      </div>
+
+      {/* Chart Card */}
+      <div style={{ 
+        background: "#ffffff", 
+        border: "1px solid #e5e5e5", 
+        borderRadius: "12px", 
+        padding: "20px",
+        position: "relative"
+      }}>
+        {/* Theme Toggle + Symbol Buttons */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {SYMBOLS.map(s => (
+              <button
+                key={s}
+                onClick={() => setSelectedSymbol(s)}
+                style={{
+                  fontSize: "12px", 
+                  padding: "6px 14px",
+                  borderRadius: "8px", 
+                  border: "1px solid",
+                  cursor: "pointer",
+                  borderColor: selectedSymbol === s ? "#2563eb" : "#d1d5db",
+                  background: selectedSymbol === s ? "#eff6ff" : "#ffffff",
+                  color: selectedSymbol === s ? "#1e40af" : "#6b7280",
+                  fontWeight: selectedSymbol === s ? 600 : 400,
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {/* Dark/Light Toggle Button */}
+          <button
+            onClick={() => setChartTheme(chartTheme === "light" ? "dark" : "light")}
+            style={{
+              fontSize: "12px",
+              padding: "6px 14px",
+              borderRadius: "8px",
+              border: "1px solid #d1d5db",
+              background: chartTheme === "dark" ? "#111111" : "#ffffff",
+              color: chartTheme === "dark" ? "#e4e4e7" : "#374151",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            {chartTheme === "light" ? "🌙 Dark Chart" : "☀️ Light Chart"}
+          </button>
+        </div>
+
+        {/* The Chart */}
+        <div 
+          ref={chartContainerRef} 
+          style={{ 
+            width: "100%", 
+            height: "420px",
+            borderRadius: "8px",
+            overflow: "hidden"
+          }} 
+        />
+
+        {/* Legend */}
+        <div style={{ display: "flex", gap: "20px", marginTop: "16px", flexWrap: "wrap" }}>
+          {[
+            { label: "approved", color: "#22c55e" },
+            { label: "rejected", color: "#ef4444" },
+            { label: "skipped", color: "#f59e0b" },
+          ].map(item => (
+            <div key={item.label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280" }}>
+              <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: item.color }} />
+              {item.label}
+            </div>
+          ))}
         </div>
       </div>
 
-      <div style={{ background: "#111111", border: "0.5px solid #1f1f1f", borderRadius: "10px", padding: "1rem", marginBottom: "1rem" }}>
-        <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
-          {["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT"].map(s => (
-            <button key={s} onClick={() => setSelectedSymbol(s)} style={{
-              fontSize: "11px", fontFamily: "monospace", padding: "3px 10px", borderRadius: "6px",
-              border: "0.5px solid", cursor: "pointer",
-              borderColor: selectedSymbol === s ? "#3b82f6" : "#1f1f1f",
-              background: selectedSymbol === s ? "#1e3a5f" : "transparent",
-              color: selectedSymbol === s ? "#93c5fd" : "#71717a",
-            }}>{s}</button>
-          ))}
-        </div>
-        <div ref={chartContainerRef} style={{ width: "100%", height: "420px" }} />
-        <div style={{ display: "flex", gap: "16px", marginTop: "10px", flexWrap: "wrap" }}>
-          {[{ label: "approved", color: "#22c55e" }, { label: "rejected", color: "#ef4444" }, { label: "skipped", color: "#f59e0b" }].map(l => (
-            <span key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", fontFamily: "monospace", color: "#71717a" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: l.color, display: "inline-block" }} />
-              {l.label}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem", marginBottom: "1rem" }}>
-        <div style={{ background: "#111111", border: "0.5px solid #1f1f1f", borderRadius: "10px", padding: "1rem 1.25rem" }}>
-          <p style={{ fontSize: "11px", fontFamily: "monospace", color: "#52525b", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: ".75rem" }}>volume / hour</p>
+      {/* Rest of the page (mini stats + table) remains in light mode */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>
+        {/* Volume / Hour Card */}
+        <div style={{ 
+          background: "#ffffff", 
+          border: "1px solid #e5e5e5", 
+          borderRadius: "12px", 
+          padding: "20px"
+        }}>
+          <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "12px" }}>
+            VOLUME / HOUR
+          </div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: "4px", height: "80px" }}>
             {hourlyVolume.map(h => (
-              <div key={h.hour} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
-                <div style={{ width: "100%", background: "#1e3a5f", height: `${Math.max(4, (h.volume / maxVol) * 64)}px`, borderRadius: "2px 2px 0 0" }} />
-                <span style={{ fontSize: "9px", fontFamily: "monospace", color: "#3f3f46" }}>{h.hour}</span>
+              <div key={h.hour} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                <div style={{
+                  width: "100%",
+                  background: "#3b82f6",
+                  height: `${Math.max(4, (h.volume / maxVol) * 64)}px`,
+                  borderRadius: "3px 3px 0 0",
+                }} />
+                <span style={{ fontSize: "10px", fontFamily: "monospace", color: "#9ca3af" }}>{h.hour}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div style={{ background: "#111111", border: "0.5px solid #1f1f1f", borderRadius: "10px", padding: "1rem 1.25rem" }}>
-          <p style={{ fontSize: "11px", fontFamily: "monospace", color: "#52525b", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: ".75rem" }}>decision breakdown</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {/* Decision Breakdown Card */}
+        <div style={{ 
+          background: "#ffffff", 
+          border: "1px solid #e5e5e5", 
+          borderRadius: "12px", 
+          padding: "20px"
+        }}>
+          <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "14px" }}>
+            DECISION BREAKDOWN
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             {(["approved", "rejected", "skipped"] as const).map(d => {
               const count = liveTrades.filter(t => t.decision === d).length
               const pct = liveTrades.length ? Math.round((count / liveTrades.length) * 100) : 0
               return (
-                <div key={d} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#71717a", width: "56px" }}>{d}</span>
-                  <div style={{ flex: 1, height: "5px", background: "#1a1a1a", borderRadius: "3px", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: decisionColor(d), borderRadius: "3px" }} />
+                <div key={d} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span style={{ fontSize: "13px", color: "#374151", width: "70px", textTransform: "capitalize" }}>{d}</span>
+                  <div style={{ flex: 1, height: "6px", background: "#f3f4f6", borderRadius: "9999px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: decisionColor(d), borderRadius: "9999px" }} />
                   </div>
-                  <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#52525b", width: "28px", textAlign: "right" }}>{count}</span>
+                  <span style={{ fontSize: "13px", color: "#6b7280", width: "30px", textAlign: "right", fontWeight: 500 }}>{count}</span>
                 </div>
               )
             })}
@@ -289,35 +373,50 @@ export default function TradesPage() {
         </div>
       </div>
 
-      <div style={{ background: "#111111", border: "0.5px solid #1f1f1f", borderRadius: "10px", padding: "1rem 1.25rem" }}>
-        <p style={{ fontSize: "11px", fontFamily: "monospace", color: "#52525b", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: ".75rem" }}>
-          recent trades <span style={{ color: "#3f3f46" }}>({filteredTrades.length})</span>
-        </p>
+      {/* Recent Trades Table */}
+      <div style={{ 
+        background: "#ffffff", 
+        border: "1px solid #e5e5e5", 
+        borderRadius: "12px", 
+        padding: "20px"
+      }}>
+        <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "12px" }}>
+          RECENT TRADES <span style={{ color: "#9ca3af" }}>({filteredTrades.length})</span>
+        </div>
+
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: "monospace" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", fontFamily: "monospace" }}>
             <thead>
-              <tr style={{ borderBottom: "0.5px solid #1f1f1f" }}>
+              <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
                 {["time", "symbol", "side", "entry", "exit", "pnl", "conf", "decision"].map(h => (
-                  <th key={h} style={{ ...cell, textAlign: "left", color: "#52525b", fontWeight: 500 }}>{h}</th>
+                  <th key={h} style={{ padding: "12px 10px", textAlign: "left", color: "#6b7280", fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filteredTrades.slice(0, 20).map(t => (
-                <tr key={t.id} style={{ borderBottom: "0.5px solid #141414" }}>
-                  <td style={{ ...cell, color: "#71717a" }}>{new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
-                  <td style={{ ...cell, color: "#a1a1aa" }}>{t.symbol}</td>
-                  <td style={{ ...cell, color: t.side === "BUY" ? "#22c55e" : "#ef4444" }}>{t.side}</td>
-                  <td style={{ ...cell, color: "#71717a" }}>{fmt(t.entry_price)}</td>
-                  <td style={{ ...cell, color: "#71717a" }}>{fmt(t.exit_price)}</td>
-                  <td style={{ ...cell, color: t.pnl >= 0 ? "#22c55e" : "#ef4444", fontWeight: 500 }}>{t.pnl >= 0 ? "+" : ""}{fmt(t.pnl)}</td>
-                  <td style={{ ...cell, color: "#71717a" }}>{(t.confidence * 100).toFixed(0)}%</td>
-                  <td style={{ ...cell }}>
+                <tr key={t.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                  <td style={{ padding: "12px 10px", color: "#6b7280" }}>
+                    {new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </td>
+                  <td style={{ padding: "12px 10px", color: "#374151" }}>{t.symbol}</td>
+                  <td style={{ padding: "12px 10px", color: t.side === "BUY" ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{t.side}</td>
+                  <td style={{ padding: "12px 10px", color: "#6b7280" }}>{fmt(t.entry_price)}</td>
+                  <td style={{ padding: "12px 10px", color: "#6b7280" }}>{fmt(t.exit_price)}</td>
+                  <td style={{ padding: "12px 10px", color: t.pnl >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600 }}>
+                    {t.pnl >= 0 ? "+" : ""}{fmt(t.pnl)}
+                  </td>
+                  <td style={{ padding: "12px 10px", color: "#6b7280" }}>{(t.confidence * 100).toFixed(0)}%</td>
+                  <td style={{ padding: "12px 10px" }}>
                     <span style={{
-                      fontSize: "10px", padding: "2px 8px", borderRadius: "10px",
-                      background: t.decision === "approved" ? "#14532d" : t.decision === "rejected" ? "#450a0a" : "#451a03",
-                      color: t.decision === "approved" ? "#22c55e" : t.decision === "rejected" ? "#ef4444" : "#f59e0b",
-                    }}>{t.decision}</span>
+                      fontSize: "11px", 
+                      padding: "4px 10px", 
+                      borderRadius: "9999px",
+                      background: decisionBg(t.decision),
+                      color: decisionColor(t.decision),
+                    }}>
+                      {t.decision}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -325,6 +424,7 @@ export default function TradesPage() {
           </table>
         </div>
       </div>
+
     </div>
   )
 }
