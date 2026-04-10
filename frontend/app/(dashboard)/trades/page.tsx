@@ -16,7 +16,7 @@ import { createTradeWebSocket, createBinanceWebSocket } from "@/lib/ws"
 import { Trade } from "@/types"
 import { config } from "@/config"
 
-const INTERVAL = "15m"
+const INTERVAL = "5m"
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT"]
 
 type Candle = { time: UTCTimestamp; open: number; high: number; low: number; close: number }
