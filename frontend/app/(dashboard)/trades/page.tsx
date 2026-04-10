@@ -1,5 +1,4 @@
 "use client"
-
 import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import {
   createChart,
@@ -13,6 +12,7 @@ import {
   createSeriesMarkers,
 } from "lightweight-charts"
 import { api } from "@/lib/api"
+import { createTradeWebSocket, createBinanceWebSocket } from "@/lib/ws"
 import { Trade } from "@/types"
 import { config } from "@/config"
 
@@ -45,7 +45,6 @@ export default function TradesPage() {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null)
   const markersPluginRef = useRef<any>(null)
-
   const [lastPrice, setLastPrice] = useState<number | null>(null)
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT")
   const [filterDecision, setFilterDecision] = useState<DecisionFilter>("all")
@@ -75,7 +74,6 @@ export default function TradesPage() {
       }))
   }, [])
 
-  // Fetch initial trades
   useEffect(() => {
     api.dashboard.trades()
       .then(setLiveTrades)
@@ -84,22 +82,17 @@ export default function TradesPage() {
       })
   }, [])
 
-  // WebSocket for live trades
   useEffect(() => {
-    const ws = new WebSocket(config.NEXT_PUBLIC_TRADE_WS_URL)
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data)
+    const ws = createTradeWebSocket((msg) => {
       if (msg.type === "initial") setLiveTrades(msg.data)
       else if (msg.type === "new_trade") setLiveTrades(prev => [msg.data, ...prev])
-    }
+    })
     return () => ws.close()
   }, [])
 
   const fetchHistoricalData = useCallback(async (symbol: string) => {
     try {
-      const raw = await api.get<unknown[][]>(
-        `/api/binance-klines?symbol=${symbol}&interval=${INTERVAL}&limit=200`
-      )
+      const raw = await api.binance.klines(symbol, INTERVAL)
       const candles: Candle[] = raw.map(k => ({
         time: Math.floor(Number(k[0]) / 1000) as UTCTimestamp,
         open: parseFloat(k[1] as string),
@@ -118,12 +111,8 @@ export default function TradesPage() {
     }
   }, [buildMarkers, symbolTrades])
 
-  // Price WebSocket
   useEffect(() => {
-    const wsUrl = `${config.NEXT_PUBLIC_API_URL.replace(/^http/, "ws")}/ws/binance-stream?symbol=${selectedSymbol.toLowerCase()}&interval=${INTERVAL}`
-    const ws = new WebSocket(wsUrl)
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data)
+    const ws = createBinanceWebSocket(selectedSymbol, INTERVAL, (msg) => {
       const k = msg.k
       if (!k) return
       const candle: Candle = {
@@ -134,66 +123,55 @@ export default function TradesPage() {
       candleSeriesRef.current?.update(candle)
       lineSeriesRef.current?.update({ time: candle.time, value: candle.close })
       setLastPrice(candle.close)
-    }
+    })
     return () => ws.close()
   }, [selectedSymbol])
 
-  // Create Chart with current theme
   useEffect(() => {
     if (!chartContainerRef.current) return
-
     const isDark = chartTheme === "dark"
-
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: 420,
-      layout: { 
-        background: { color: isDark ? "#111111" : "#ffffff" }, 
-        textColor: isDark ? "#a1a1aa" : "#52525b", 
-        fontSize: 11, 
-        fontFamily: "monospace" 
+      layout: {
+        background: { color: isDark ? "#111111" : "#ffffff" },
+        textColor: isDark ? "#a1a1aa" : "#52525b",
+        fontSize: 11,
+        fontFamily: "monospace"
       },
-      grid: { 
-        vertLines: { color: isDark ? "#1f1f1f" : "#f1f1f1" }, 
-        horzLines: { color: isDark ? "#1f1f1f" : "#f1f1f1" } 
+      grid: {
+        vertLines: { color: isDark ? "#1f1f1f" : "#f1f1f1" },
+        horzLines: { color: isDark ? "#1f1f1f" : "#f1f1f1" }
       },
       crosshair: { mode: 1 },
       rightPriceScale: { borderColor: isDark ? "#1f1f1f" : "#e5e5e5" },
       timeScale: { borderColor: isDark ? "#1f1f1f" : "#e5e5e5", timeVisible: true, secondsVisible: false },
     })
-
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#22c55e", 
+      upColor: "#22c55e",
       downColor: "#ef4444",
-      borderUpColor: "#22c55e", 
+      borderUpColor: "#22c55e",
       borderDownColor: "#ef4444",
-      wickUpColor: "#22c55e", 
+      wickUpColor: "#22c55e",
       wickDownColor: "#ef4444",
     })
-
     const lineSeries = chart.addSeries(LineSeries, {
       color: isDark ? "#60a5fa" : "#3b82f6",
       lineWidth: 2,
     })
-
     const markersPlugin = createSeriesMarkers(candleSeries)
-
     chartRef.current = chart
     candleSeriesRef.current = candleSeries
     lineSeriesRef.current = lineSeries
     markersPluginRef.current = markersPlugin
-
     fetchHistoricalData(selectedSymbol)
-
     const ro = new ResizeObserver(entries => {
       chart.applyOptions({ width: entries[0].contentRect.width })
     })
     ro.observe(chartContainerRef.current)
-
     return () => { ro.disconnect(); chart.remove() }
   }, [chartTheme, selectedSymbol, fetchHistoricalData])
 
-  // Update markers when trades change
   useEffect(() => {
     markersPluginRef.current?.setMarkers(buildMarkers(symbolTrades))
   }, [symbolTrades, buildMarkers])
@@ -207,8 +185,6 @@ export default function TradesPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-
-      {/* Header Row */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
         <div>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "4px" }}>
@@ -219,17 +195,16 @@ export default function TradesPage() {
             <span style={{ fontSize: "15px", color: "#6b7280", marginLeft: "10px", fontWeight: 500 }}>{selectedSymbol}</span>
           </div>
         </div>
-
         <select
           value={filterDecision}
           onChange={e => setFilterDecision(e.target.value as DecisionFilter)}
           style={{
-            fontSize: "13px", 
+            fontSize: "13px",
             padding: "8px 14px",
-            borderRadius: "8px", 
+            borderRadius: "8px",
             border: "1px solid #d1d5db",
-            background: "#ffffff", 
-            color: "#374151", 
+            background: "#ffffff",
+            color: "#374151",
             cursor: "pointer",
           }}
         >
@@ -240,15 +215,13 @@ export default function TradesPage() {
         </select>
       </div>
 
-      {/* Chart Card */}
-      <div style={{ 
-        background: "#ffffff", 
-        border: "1px solid #e5e5e5", 
-        borderRadius: "12px", 
+      <div style={{
+        background: "#ffffff",
+        border: "1px solid #e5e5e5",
+        borderRadius: "12px",
         padding: "20px",
         position: "relative"
       }}>
-        {/* Theme Toggle + Symbol Buttons */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {SYMBOLS.map(s => (
@@ -256,9 +229,9 @@ export default function TradesPage() {
                 key={s}
                 onClick={() => setSelectedSymbol(s)}
                 style={{
-                  fontSize: "12px", 
+                  fontSize: "12px",
                   padding: "6px 14px",
-                  borderRadius: "8px", 
+                  borderRadius: "8px",
                   border: "1px solid",
                   cursor: "pointer",
                   borderColor: selectedSymbol === s ? "#2563eb" : "#d1d5db",
@@ -271,8 +244,6 @@ export default function TradesPage() {
               </button>
             ))}
           </div>
-
-          {/* Dark/Light Toggle Button */}
           <button
             onClick={() => setChartTheme(chartTheme === "light" ? "dark" : "light")}
             style={{
@@ -291,19 +262,15 @@ export default function TradesPage() {
             {chartTheme === "light" ? "🌙 Dark Chart" : "☀️ Light Chart"}
           </button>
         </div>
-
-        {/* The Chart */}
-        <div 
-          ref={chartContainerRef} 
-          style={{ 
-            width: "100%", 
+        <div
+          ref={chartContainerRef}
+          style={{
+            width: "100%",
             height: "420px",
             borderRadius: "8px",
             overflow: "hidden"
-          }} 
+          }}
         />
-
-        {/* Legend */}
         <div style={{ display: "flex", gap: "20px", marginTop: "16px", flexWrap: "wrap" }}>
           {[
             { label: "approved", color: "#22c55e" },
@@ -318,13 +285,11 @@ export default function TradesPage() {
         </div>
       </div>
 
-      {/* Rest of the page (mini stats + table) remains in light mode */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>
-        {/* Volume / Hour Card */}
-        <div style={{ 
-          background: "#ffffff", 
-          border: "1px solid #e5e5e5", 
-          borderRadius: "12px", 
+        <div style={{
+          background: "#ffffff",
+          border: "1px solid #e5e5e5",
+          borderRadius: "12px",
           padding: "20px"
         }}>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "12px" }}>
@@ -345,11 +310,10 @@ export default function TradesPage() {
           </div>
         </div>
 
-        {/* Decision Breakdown Card */}
-        <div style={{ 
-          background: "#ffffff", 
-          border: "1px solid #e5e5e5", 
-          borderRadius: "12px", 
+        <div style={{
+          background: "#ffffff",
+          border: "1px solid #e5e5e5",
+          borderRadius: "12px",
           padding: "20px"
         }}>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "14px" }}>
@@ -373,17 +337,15 @@ export default function TradesPage() {
         </div>
       </div>
 
-      {/* Recent Trades Table */}
-      <div style={{ 
-        background: "#ffffff", 
-        border: "1px solid #e5e5e5", 
-        borderRadius: "12px", 
+      <div style={{
+        background: "#ffffff",
+        border: "1px solid #e5e5e5",
+        borderRadius: "12px",
         padding: "20px"
       }}>
         <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: "12px" }}>
           RECENT TRADES <span style={{ color: "#9ca3af" }}>({filteredTrades.length})</span>
         </div>
-
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", fontFamily: "monospace" }}>
             <thead>
@@ -409,8 +371,8 @@ export default function TradesPage() {
                   <td style={{ padding: "12px 10px", color: "#6b7280" }}>{(t.confidence * 100).toFixed(0)}%</td>
                   <td style={{ padding: "12px 10px" }}>
                     <span style={{
-                      fontSize: "11px", 
-                      padding: "4px 10px", 
+                      fontSize: "11px",
+                      padding: "4px 10px",
                       borderRadius: "9999px",
                       background: decisionBg(t.decision),
                       color: decisionColor(t.decision),
@@ -424,7 +386,6 @@ export default function TradesPage() {
           </table>
         </div>
       </div>
-
     </div>
   )
 }

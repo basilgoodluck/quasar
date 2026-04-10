@@ -1,6 +1,5 @@
-// lib/api.ts
+
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:7052"
-const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK === "true"
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
@@ -16,7 +15,6 @@ async function request<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { body, headers = {}, signal } = options
-
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     method,
     signal,
@@ -35,40 +33,18 @@ async function request<T>(
   return res.json() as Promise<T>
 }
 
-async function loadMock<T>(file: string): Promise<T> {
-  const mod = await import(`@/data/${file}.json`)
-  return mod.default as T
-}
-
-function resolve<T>(file: string, endpoint: string): Promise<T> {
-  return MOCK_MODE ? loadMock<T>(file) : request<T>("GET", endpoint)
-}
-
 export const api = {
   get: <T>(endpoint: string, options?: RequestOptions) =>
     request<T>("GET", endpoint, options),
 
-  post: <T>(endpoint: string, body: unknown, options?: RequestOptions) =>
-    request<T>("POST", endpoint, { ...options, body }),
-
-  put: <T>(endpoint: string, body: unknown, options?: RequestOptions) =>
-    request<T>("PUT", endpoint, { ...options, body }),
-
-  patch: <T>(endpoint: string, body: unknown, options?: RequestOptions) =>
-    request<T>("PATCH", endpoint, { ...options, body }),
-
-  delete: <T>(endpoint: string, options?: RequestOptions) =>
-    request<T>("DELETE", endpoint, options),
-
   dashboard: {
-    status: () => resolve("status", "/api/dashboard/status"),
-    trades: () => resolve("trades", "/ws/trade/recent"),
-    regime: () => resolve("regime", "/api/dashboard/regime"),
-    risk: () => resolve("risk", "/api/dashboard/risk"),
-    reputation: () => resolve("reputation", "/api/dashboard/reputation"),
-    positions: () => resolve("positions", "/api/dashboard/positions"),
-    publicStats: () => resolve("public-stats", "/api/public/stats"),
-    updateConfig: (body: unknown) =>
-      request("PATCH", "/api/dashboard/config", { body }),
+    trades: () => api.get<any[]>("/ws/trade/recent"),
+  },
+
+  binance: {
+    klines: (symbol: string, interval: string = "15m", limit: number = 200) =>
+      api.get<unknown[][]>(
+        `/api/binance-klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+      ),
   },
 }

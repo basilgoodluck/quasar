@@ -123,7 +123,7 @@ class BaseStrategy(ABC):
         leverage = decision["leverage"]
 
         amount = decision["amount_usd"]  # FIX: use pre-computed amount from compute_risk
-        volume = str(round(amount / price, 6))
+        volume = str(int(amount))
 
         if not KRAKEN_PAPER_MODE:
             loop   = asyncio.get_event_loop()
