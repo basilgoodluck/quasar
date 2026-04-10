@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { BASE_URL } from "@/lib/api"
 
 const NAV = [
-  { href: "/trades", label: "overview", icon: "▦" },
+  { href: "/overview", label: "overview", icon: "▦" },
   { href: "/trades", label: "trades", icon: "⇅" },
   { href: "/checkpoints", label: "checkpoints", icon: "◎" },
   { href: "/activity", label: "activity", icon: "≋" },

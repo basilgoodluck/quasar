@@ -120,13 +120,10 @@ class BaseStrategy(ABC):
     async def open_position(self, decision: dict, price: float, reputation: float = 0.0, order_type: str = "market") -> dict:
         pair     = decision["symbol"]
         action   = decision["action"]
-        risk_pct = decision["risk_pct"]
         leverage = decision["leverage"]
 
-        from contracts.vault import get_available_capital
-        available  = get_available_capital()
-        amount     = round((available * risk_pct / 100) * leverage, 2)
-        volume     = str(round(amount / price, 6))
+        amount = decision["amount_usd"]  # FIX: use pre-computed amount from compute_risk
+        volume = str(round(amount / price, 6))
 
         if not KRAKEN_PAPER_MODE:
             loop   = asyncio.get_event_loop()

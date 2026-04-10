@@ -279,6 +279,7 @@ class ARCStrategy(BaseStrategy):
             "leverage":    params["leverage"],
             "risk_pct":    params["risk_pct"],
             "rr_ratio":    params["rr_ratio"],
+            "amount_usd":  params["amount_usd"],  # FIX: pass through pre-computed amount
             "explanation": explanation,
             "regime":      regime,
             "structure":   structure,
