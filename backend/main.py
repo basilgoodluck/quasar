@@ -1,16 +1,10 @@
-import sys
-import os
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
 import asyncio
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from middleware.security import rate_limit
-from database.database import init_pool
+from backend.middleware.security import rate_limit
+from backend.database.database import init_pool
 
 from api.auth import router as auth_router
 # from api.public import router as public_router
