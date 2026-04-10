@@ -11,3 +11,4 @@ alembic
 uvicorn
 fastapi
 torch
+redis
