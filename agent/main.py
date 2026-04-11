@@ -3,6 +3,7 @@ from database.connection import get_pool
 from agent.strategy.arc import ARCStrategy
 from agent.features import fetch_ohlcv
 from agent.reputation import get_reputation_score
+from agent.monitor import monitor_loop
 from config import TRAIN_INTERVAL, COLLECT_LOOP_SLEEP
 from logger import get_logger
 
@@ -46,7 +47,6 @@ async def get_current_price(symbol: str) -> float | None:
 async def process_symbol(symbol: str, reputation: float):
     try:
         decision = await strategy.analyze(symbol)
-
         if not decision["ready"]:
             logger.info(f"[{symbol}] SKIP — {decision['explanation']}")
             return
@@ -57,18 +57,17 @@ async def process_symbol(symbol: str, reputation: float):
             return
 
         result = await strategy.open_position(decision, price, reputation)
-
         if result["executed"]:
             logger.info(
                 f"[{symbol}] {decision['action']} executed "
                 f"leverage={decision['leverage']}x "
                 f"risk={decision['risk_pct']}% "
                 f"rr={decision['rr_ratio']} "
-                f"price={price}"
+                f"price={price} "
+                f"sl={result['sl_price']} tp={result['tp_price']}"
             )
         else:
             logger.warning(f"[{symbol}] execution failed — {result.get('reason')}")
-
     except Exception as e:
         logger.error(f"[{symbol}] error: {e}")
 
@@ -76,6 +75,9 @@ async def process_symbol(symbol: str, reputation: float):
 async def main():
     logger.info("[main] agent starting")
     await seed_symbols()
+
+    # start monitor as background task
+    asyncio.create_task(monitor_loop(strategy))
 
     while True:
         start      = asyncio.get_event_loop().time()
@@ -87,7 +89,9 @@ async def main():
             await asyncio.sleep(COLLECT_LOOP_SLEEP)
             continue
 
-        await asyncio.gather(*[process_symbol(s, reputation) for s in symbols])
+        # process sequentially so open_count check is accurate
+        for symbol in symbols:
+            await process_symbol(symbol, reputation)
 
         elapsed = asyncio.get_event_loop().time() - start
         await asyncio.sleep(max(0, COLLECT_LOOP_SLEEP - elapsed))
