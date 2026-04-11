@@ -137,5 +137,5 @@ jobs:
             cd /opt/projects/quasar
             git fetch origin
             git reset --hard origin/main
-            docker compose build --parallel
+            docker compose pull
             docker compose up -d --remove-orphans
