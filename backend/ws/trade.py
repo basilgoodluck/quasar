@@ -1,19 +1,15 @@
+# ws/trade.py
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import List
-import asyncio
 import websockets
-import json
 import httpx
 from database.database import get_db
-from services.trade import (
-    get_recent_trades, get_all_trades,
-    get_dashboard_overview, get_activity,
-)
+from services.trade import get_all_trades, format_trade
 
-router = APIRouter(tags=["trade"])
+router = APIRouter()
 
 
-# ─── WebSocket Manager ────────────────────────────────────────────────────────
+# ── Connection Manager ────────────────────────────────────────────────────────
 
 class ConnectionManager:
     def __init__(self):
@@ -38,27 +34,9 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-# ─── HTTP Endpoints ───────────────────────────────────────────────────────────
+# ── GET /api/binance/klines ───────────────────────────────────────────────────
 
-@router.get("/dashboard/overview")
-async def dashboard_overview():
-    db = await get_db()
-    return await get_dashboard_overview(db=db)
-
-
-@router.get("/dashboard/trades")
-async def dashboard_trades(status: str = None, pair: str = None, limit: int = 100):
-    db = await get_db()
-    return await get_all_trades(status=status, pair=pair, limit=limit, db=db)
-
-
-@router.get("/activity")
-async def activity(limit: int = 50):
-    db = await get_db()
-    return await get_activity(limit=limit, db=db)
-
-
-@router.get("/binance-klines")
+@router.get("/binance/klines")
 async def binance_klines(symbol: str, interval: str = "15m", limit: int = 200):
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol.upper()}&interval={interval}&limit={limit}"
     async with httpx.AsyncClient() as client:
@@ -67,24 +45,26 @@ async def binance_klines(symbol: str, interval: str = "15m", limit: int = 200):
         return resp.json()
 
 
-# ─── WebSockets ───────────────────────────────────────────────────────────────
+# ── WS /ws/trades ─────────────────────────────────────────────────────────────
 
 @router.websocket("/trades")
 async def trade_websocket(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         db      = await get_db()
-        initial = await get_recent_trades(limit=30, db=db)
+        initial = await get_all_trades(limit=50, db=db)
         await websocket.send_json({"type": "initial", "data": initial})
         while True:
-            data = await websocket.receive_text()
-            if data == "ping":
+            msg = await websocket.receive_text()
+            if msg == "ping":
                 await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception:
         manager.disconnect(websocket)
 
+
+# ── WS /ws/binance-stream ─────────────────────────────────────────────────────
 
 @router.websocket("/binance-stream")
 async def binance_stream(websocket: WebSocket, symbol: str = "btcusdt", interval: str = "15m"):
@@ -100,26 +80,7 @@ async def binance_stream(websocket: WebSocket, symbol: str = "btcusdt", interval
         await websocket.close()
 
 
-# ─── Background: Binance Price Relay ─────────────────────────────────────────
+# ── Broadcast helper (called by agent after inserting a trade) ────────────────
 
-async def binance_price_relay(symbol: str = "btcusdt"):
-    url = f"wss://stream.binance.com:9443/ws/{symbol}@trade"
-    while True:
-        try:
-            async with websockets.connect(url) as ws:
-                async for raw in ws:
-                    msg   = json.loads(raw)
-                    price = float(msg["p"])
-                    await manager.broadcast({"type": "price", "symbol": symbol.upper(), "price": price})
-        except Exception:
-            await asyncio.sleep(3)
-
-
-# ─── Broadcast helpers ────────────────────────────────────────────────────────
-
-async def broadcast_new_trade(trade_data: dict):
-    await manager.broadcast({"type": "new_trade", "data": trade_data})
-
-
-async def broadcast_event(event_data: dict):
-    await manager.broadcast({"type": "event", "data": event_data})
+async def broadcast_new_trade(trade_row: dict):
+    await manager.broadcast({"type": "new_trade", "data": format_trade(trade_row)})

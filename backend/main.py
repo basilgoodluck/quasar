@@ -1,3 +1,4 @@
+# main.py
 import asyncio
 import uvicorn
 from contextlib import asynccontextmanager
@@ -7,14 +8,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from middleware.security import rate_limit
 from database.database import init_pool
 from api.auth import router as auth_router
-from ws.trade import router as trade_router, binance_price_relay
+from api.dashboard import router as dashboard_router
+from ws.trade import router as trade_router
 from config import FRONTEND_URL, SECRET_KEY
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_pool()
-    asyncio.create_task(binance_price_relay("btcusdt"))
     yield
 
 
@@ -31,9 +32,17 @@ app.add_middleware(
 
 app.middleware("http")(rate_limit)
 
+# /auth/*
 app.include_router(auth_router, prefix="/auth")
-app.include_router(trade_router, prefix="/api")  # → /api/dashboard/overview, /api/binance-klines etc
-                                                  # → /api/trades (ws), /api/binance-stream (ws)
+
+# /api/dashboard/trades
+# /api/binance/klines
+app.include_router(dashboard_router, prefix="/api")
+app.include_router(trade_router, prefix="/api")
+
+# /ws/trades
+# /ws/binance-stream
+app.include_router(trade_router, prefix="/ws")
 
 
 if __name__ == "__main__":
