@@ -3,7 +3,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import List
 import websockets
 import httpx
-from database.database import get_db
+from database.database import pool
 from services.trade import get_all_trades, format_trade
 
 router = APIRouter()
@@ -51,8 +51,8 @@ async def binance_klines(symbol: str, interval: str = "15m", limit: int = 200):
 async def trade_websocket(websocket: WebSocket):
     await manager.connect(websocket)
     try:
-        db      = await get_db()
-        initial = await get_all_trades(limit=50, db=db)
+        async with pool.acquire() as db:
+            initial = await get_all_trades(limit=50, db=db)
         await websocket.send_json({"type": "initial", "data": initial})
         while True:
             msg = await websocket.receive_text()
@@ -80,7 +80,11 @@ async def binance_stream(websocket: WebSocket, symbol: str = "btcusdt", interval
         await websocket.close()
 
 
-# ── Broadcast helper (called by agent after inserting a trade) ────────────────
+# ── Broadcast helpers ─────────────────────────────────────────────────────────
 
 async def broadcast_new_trade(trade_row: dict):
     await manager.broadcast({"type": "new_trade", "data": format_trade(trade_row)})
+
+
+async def broadcast_event(event_data: dict):
+    await manager.broadcast({"type": "event", "data": event_data})

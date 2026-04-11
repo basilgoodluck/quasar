@@ -22,6 +22,7 @@ async function request<T>(
       "Content-Type": "application/json",
       ...headers,
     },
+    credentials: "include",
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
   if (!res.ok) {
