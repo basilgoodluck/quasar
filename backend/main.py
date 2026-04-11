@@ -3,15 +3,14 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from middleware.security import rate_limit
 from database.database import init_pool
-
 from api.auth import router as auth_router
 # from api.public import router as public_router
 from api.private import router as private_router
 from ws.trade import router as trade_router, binance_price_relay
-
-from config import FRONTEND_URL
+from config import FRONTEND_URL, SECRET_KEY
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,12 +21,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Quasar Agent API", lifespan=lifespan)
 
 app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+)
+
+app.add_middleware(
     CORSMiddleware,
     allow_origins=[FRONTEND_URL, "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.middleware("http")(rate_limit)
 
 app.include_router(auth_router, prefix="/auth")
