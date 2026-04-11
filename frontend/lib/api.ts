@@ -1,4 +1,4 @@
-
+// lib/api.ts
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:7052"
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -24,12 +24,10 @@ async function request<T>(
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
-
   if (!res.ok) {
     const error = await res.text().catch(() => res.statusText)
     throw new Error(`${method} ${endpoint} failed [${res.status}]: ${error}`)
   }
-
   return res.json() as Promise<T>
 }
 
@@ -38,13 +36,13 @@ export const api = {
     request<T>("GET", endpoint, options),
 
   dashboard: {
-    trades: () => api.get<any[]>("/ws/trade/recent"),
+    trades: () => api.get<any[]>("/api/dashboard/trades"),
   },
 
   binance: {
     klines: (symbol: string, interval: string = "15m", limit: number = 200) =>
       api.get<unknown[][]>(
-        `/api/binance-klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+        `/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
       ),
   },
 }

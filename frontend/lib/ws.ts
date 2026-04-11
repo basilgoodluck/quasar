@@ -1,8 +1,10 @@
 // lib/ws.ts
-import { config } from "@/config"
+import { BASE_URL } from "@/lib/api"
 
-export const createTradeWebSocket = (onMessage: (data: any) => void) => {
-  const ws = new WebSocket(config.NEXT_PUBLIC_TRADE_WS_URL)
+const WS_BASE = BASE_URL.replace(/^http/, "ws")
+
+export const createTradeWebSocket = (onMessage: (data: any) => void): WebSocket => {
+  const ws = new WebSocket(`${WS_BASE}/ws/trades`)
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data)
@@ -16,9 +18,8 @@ export const createBinanceWebSocket = (
   symbol: string,
   interval: string = "15m",
   onMessage: (data: any) => void
-) => {
-  const wsUrl = `${config.NEXT_PUBLIC_API_URL.replace(/^http/, "ws")}/ws/binance-stream?symbol=${symbol.toLowerCase()}&interval=${interval}`
-  const ws = new WebSocket(wsUrl)
+): WebSocket => {
+  const ws = new WebSocket(`${WS_BASE}/ws/binance-stream?symbol=${symbol.toLowerCase()}&interval=${interval}`)
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data)
