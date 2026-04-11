@@ -8,8 +8,15 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-POLL_INTERVAL  = 30       # seconds between monitor ticks
-MAX_TRADE_AGE  = 3600     # 1 hour hard close
+POLL_INTERVAL = 30    # seconds
+MAX_TRADE_AGE = 3600  # 1 hour
+
+
+def _pf_to_symbol(pf_pair: str) -> str:
+    """Convert PF_XBTUSD -> BTCUSDT, PF_ETHUSD -> ETHUSDT, etc."""
+    base = pf_pair.replace("PF_", "").replace("USD", "")
+    base = "BTC" if base == "XBT" else base
+    return f"{base}USDT"
 
 
 async def get_pending_trades() -> list[dict]:
@@ -25,11 +32,7 @@ async def get_pending_trades() -> list[dict]:
 
 
 async def get_current_price(symbol: str) -> float | None:
-    # pair in DB is PF_XBTUSD format, convert back to OHLCV symbol
-    base = symbol.replace("PF_", "").replace("USD", "")
-    base = "BTC" if base == "XBT" else base
-    ohlcv_symbol = f"{base}USDT"
-    df = await fetch_ohlcv(ohlcv_symbol, TRAIN_INTERVAL, 5)
+    df = await fetch_ohlcv(symbol, TRAIN_INTERVAL, 5)
     if df is None or len(df) == 0:
         return None
     return float(df["close"].iloc[-1])
@@ -48,7 +51,8 @@ async def monitor_loop(strategy: BaseStrategy):
 
             for trade in trades:
                 intent_hash = trade["intent_hash"]
-                pair        = trade["pair"]
+                pf_pair     = trade["pair"]           # e.g. PF_XBTUSD
+                symbol      = _pf_to_symbol(pf_pair)  # e.g. BTCUSDT
                 action      = trade["action"]
                 entry_price = float(trade["entry_price"])
                 amount_usd  = float(trade["amount_usd"])
@@ -57,17 +61,12 @@ async def monitor_loop(strategy: BaseStrategy):
                 created_at  = int(trade["created_at"])
                 age         = now - created_at
 
-                current_price = await get_current_price(pair)
+                current_price = await get_current_price(symbol)
                 if current_price is None:
-                    logger.warning(f"[monitor] could not fetch price for {pair}")
+                    logger.warning(f"[monitor] could not fetch price for {symbol}")
                     continue
 
-                # derive symbol for close_position (XBTUSD -> BTCUSDT handled inside)
-                symbol = pair  # pass PF_ pair, close_position calls _pf internally which is a no-op if already PF_
-
-                # compute contracts for close
-                contracts = str(round(amount_usd / entry_price, 4))
-
+                contracts    = str(round(amount_usd / entry_price, 4))
                 close_reason = None
 
                 if age >= MAX_TRADE_AGE:
@@ -86,7 +85,7 @@ async def monitor_loop(strategy: BaseStrategy):
                         close_reason = f"TP hit — price={current_price} <= tp={tp_price}"
 
                 if close_reason:
-                    logger.info(f"[monitor] closing {pair} ({action}) — {close_reason}")
+                    logger.info(f"[monitor] closing {symbol} ({action}) — {close_reason}")
                     result = await strategy.close_position(
                         symbol=symbol,
                         volume=contracts,
@@ -95,12 +94,12 @@ async def monitor_loop(strategy: BaseStrategy):
                         reason=close_reason,
                     )
                     if result["closed"]:
-                        logger.info(f"[monitor] {pair} closed — status={result['status']}")
+                        logger.info(f"[monitor] {symbol} closed — status={result['status']}")
                     else:
-                        logger.error(f"[monitor] {pair} close failed — {result.get('reason')}")
+                        logger.error(f"[monitor] {symbol} close failed — {result.get('reason')}")
                 else:
                     logger.info(
-                        f"[monitor] {pair} ({action}) watching — "
+                        f"[monitor] {symbol} ({action}) watching — "
                         f"price={current_price} sl={sl_price} tp={tp_price} age={age}s"
                     )
 
