@@ -1,22 +1,28 @@
 import asyncio
+import time
 from database.connection import get_pool
 from contracts.vault import get_available_capital
 from logger import get_logger
 
 logger = get_logger(__name__)
 
-MAX_DRAWDOWN       = 0.05
-MAX_CONCURRENT     = 3
-BASE_CONCURRENT    = 1
+MAX_DRAWDOWN        = 0.05
+MAX_CONCURRENT      = 3
+BASE_CONCURRENT     = 1
 MIN_WIN_RATE_SAMPLE = 10
-DEFAULT_WIN_RATE   = 0.45
-MAX_TRADE_USD      = 1000.0
-MIN_RISK_PCT       = 0.005
-MAX_RISK_PCT       = 0.02
-MIN_LEVERAGE       = 2.0
-MAX_LEVERAGE       = 5.0
-MIN_RR             = 1.5
-MAX_RR             = 3.0
+DEFAULT_WIN_RATE    = 0.45
+MAX_TRADE_USD       = 1000.0
+MIN_RISK_PCT        = 0.005
+MAX_RISK_PCT        = 0.02
+MIN_LEVERAGE        = 2.0
+MAX_LEVERAGE        = 5.0
+MIN_RR              = 1.5
+MAX_RR              = 3.0
+
+DRAWDOWN_COOLDOWN_SECS = 3600  # 1 hour cooldown when drawdown limit is hit
+
+# module-level cooldown state — resets on process restart
+_drawdown_cooldown_until: float = 0.0
 
 
 async def get_open_count() -> int:
@@ -45,20 +51,24 @@ async def get_win_rate() -> tuple[float, int]:
 
 
 async def get_drawdown() -> float:
+    """
+    Drawdown = total USD lost on resolved LOSS trades / total available capital.
+    Dividing by capital (not total_risked) prevents a single loss inflating
+    the ratio to 100% when only a few trades have been made.
+    """
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow("""
             SELECT
-                SUM(CASE WHEN status = 'LOSS' AND exit_price IS NOT NULL THEN amount_usd ELSE 0 END) AS total_lost,
-                SUM(amount_usd) AS total_risked
+                SUM(CASE WHEN status = 'LOSS' AND exit_price IS NOT NULL THEN amount_usd ELSE 0 END) AS total_lost
             FROM trade_outcomes
             WHERE status IN ('WIN', 'LOSS')
         """)
-    total_lost   = row["total_lost"] or 0
-    total_risked = row["total_risked"] or 0
-    if total_risked == 0:
+    total_lost = float(row["total_lost"] or 0)
+    capital    = get_available_capital()
+    if capital == 0:
         return 0.0
-    return float(total_lost / total_risked)
+    return round(total_lost / capital, 6)
 
 
 def allowed_concurrent(reputation: float, win_rate: float) -> int:
@@ -85,6 +95,8 @@ def regime_rr(regime: str, confidence: float) -> float:
 
 
 async def compute_risk(regime: dict, reputation: float) -> dict:
+    global _drawdown_cooldown_until
+
     current_regime = regime.get("regime", "ranging")
     confidence     = regime.get("confidence", 0.0)
 
@@ -96,18 +108,29 @@ async def compute_risk(regime: dict, reputation: float) -> dict:
 
     win_rate, sample_size = win_rate_data
 
+    # --- Drawdown cooldown (replaces hard block) ---
     if drawdown >= MAX_DRAWDOWN:
-        logger.warning(f"[risk] drawdown {drawdown:.2%} hit limit — blocking all trades")
-        return {
-            "action":      "SKIP",
-            "leverage":    MIN_LEVERAGE,
-            "risk_pct":    MIN_RISK_PCT,
-            "rr_ratio":    MIN_RR,
-            "explanation": f"Drawdown limit reached {drawdown:.2%}",
-        }
+        now = time.time()
+        if now < _drawdown_cooldown_until:
+            remaining = int(_drawdown_cooldown_until - now)
+            logger.warning(f"[risk] drawdown {drawdown:.2%} — cooldown active, {remaining}s remaining")
+            return {
+                "action":      "SKIP",
+                "leverage":    MIN_LEVERAGE,
+                "risk_pct":    MIN_RISK_PCT,
+                "rr_ratio":    MIN_RR,
+                "explanation": f"Drawdown cooldown active ({remaining}s remaining) — drawdown={drawdown:.2%}",
+            }
+        else:
+            # Cooldown expired or first breach — set/reset it and let this cycle through
+            _drawdown_cooldown_until = now + DRAWDOWN_COOLDOWN_SECS
+            logger.warning(
+                f"[risk] drawdown {drawdown:.2%} hit limit — "
+                f"starting {DRAWDOWN_COOLDOWN_SECS}s cooldown, resuming after"
+            )
 
-    remaining_drawdown  = MAX_DRAWDOWN - drawdown
-    max_concurrent      = allowed_concurrent(reputation, win_rate)
+    remaining_drawdown = MAX_DRAWDOWN - drawdown
+    max_concurrent     = allowed_concurrent(reputation, win_rate)
 
     if open_count >= max_concurrent:
         logger.info(f"[risk] {open_count} open positions — limit is {max_concurrent}")
