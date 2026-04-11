@@ -18,11 +18,11 @@ async function request<T>(
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     method,
     signal,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...headers,
     },
-    credentials: "include",
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
   if (!res.ok) {
@@ -37,7 +37,8 @@ export const api = {
     request<T>("GET", endpoint, options),
 
   dashboard: {
-    trades: () => api.get<any[]>("/api/dashboard/trades"),
+    overview: () => api.get<any>("/api/dashboard/overview"),
+    trades:   () => api.get<any[]>("/api/dashboard/trades"),
   },
 
   binance: {

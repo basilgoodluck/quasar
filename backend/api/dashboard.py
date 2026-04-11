@@ -1,9 +1,14 @@
 # api/dashboard.py
 from fastapi import APIRouter, Depends
 from database.database import get_db
-from services.trade import get_all_trades
+from services.trade import get_all_trades, get_dashboard_overview
 
 router = APIRouter()
+
+
+@router.get("/dashboard/overview")
+async def dashboard_overview(db=Depends(get_db)):
+    return await get_dashboard_overview(db=db)
 
 
 @router.get("/dashboard/trades")

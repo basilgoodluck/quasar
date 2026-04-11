@@ -1,7 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { api } from "@/lib/api"
 import { Trade } from "@/types"
+
+type RegimeInfo = {
+  direction: string
+  p_long: number
+  p_short: number
+  p_neutral: number
+}
 
 type DashboardData = {
   totalPnl: number
@@ -14,18 +22,12 @@ type DashboardData = {
   winCount: number
   lossCount: number
   avgRR: number
-  expectedRR: number
   bestTrade: number
   worstTrade: number
   reputationScore: number
   reputationTrend: "up" | "down" | "flat"
-  regimes: Record<string, any>
-  activeAgents: string[]
+  regimes: Record<string, RegimeInfo>
   symbolsTraded: string[]
-  currentLeverage: number
-  currentRiskPct: number
-  latestPositionSize: number
-  recentSignals: Trade[]
   recentOutcomes: Trade[]
 }
 
@@ -33,149 +35,128 @@ function fmt(n: number, decimals = 2) {
   return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 }
 
-const mockData: DashboardData = {
-  totalPnl: 2847.65,
-  winRate: 68.4,
-  currentDrawdown: 6.8,
-  maxDrawdown: 14.2,
-  activePositions: 3,
-  totalEquity: 18740,
-  resolvedTrades: 87,
-  winCount: 60,
-  lossCount: 27,
-  avgRR: 1.94,
-  expectedRR: 2.0,
-  bestTrade: 1240,
-  worstTrade: -680,
-  reputationScore: 86,
-  reputationTrend: "up",
-  regimes: {
-    BTCUSDT: { state: "trending", direction: "bullish", strength: "strong" },
-    ETHUSDT: { state: "ranging", direction: "neutral", strength: "medium" }
-  },
-  activeAgents: ["momentum", "breakout"],
-  symbolsTraded: ["BTCUSDT", "ETHUSDT"],
-  currentLeverage: 5.2,
-  currentRiskPct: 1.4,
-  latestPositionSize: 1240,
-  recentSignals: [],
-  recentOutcomes: [],
+function trendIcon(t: "up" | "down" | "flat") {
+  if (t === "up") return <span style={{ color: "#22c55e" }}>↑</span>
+  if (t === "down") return <span style={{ color: "#ef4444" }}>↓</span>
+  return <span style={{ color: "#9ca3af" }}>→</span>
 }
 
 export default function DashboardPage() {
-  const [data] = useState<DashboardData>(mockData)
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Simple mock equity curve data
-  const equityData = [
-    15200, 15410, 15380, 15620, 15890, 15750, 16020, 16340,
-    16210, 16580, 16890, 16720, 17050, 17380, 17240, 17610,
-    17930, 17820, 18150, 18470, 18390, 18740
-  ]
+  useEffect(() => {
+    api.dashboard.overview()
+      .then(d => { setData(d); setError(null) })
+      .catch(() => setError("failed to load dashboard"))
+      .finally(() => setLoading(false))
+  }, [])
 
-  const maxEquity = Math.max(...equityData)
-  const minEquity = Math.min(...equityData)
+  if (loading) return (
+    <div style={{ padding: "60px", textAlign: "center", fontFamily: "monospace", color: "#9ca3af" }}>loading...</div>
+  )
+
+  if (error || !data) return (
+    <div style={{ padding: "60px", textAlign: "center", fontFamily: "monospace", color: "#ef4444" }}>{error ?? "no data"}</div>
+  )
+
+  const startEquity = data.totalEquity - data.totalPnl || 1
+  const pnlPct = ((data.totalPnl / startEquity) * 100).toFixed(1)
 
   return (
     <div className="flex flex-col gap-6">
 
+      {/* Header */}
       <div>
         <div className="text-xs font-mono tracking-[0.08em] text-black uppercase">SYSTEM HEALTH</div>
         <div className="text-3xl font-bold text-black mt-1">
           ${fmt(data.totalPnl)}
           <span className={`ml-3 text-xl ${data.totalPnl >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {data.totalPnl >= 0 ? "+" : ""}{((data.totalPnl / (data.totalEquity - data.totalPnl || 1)) * 100).toFixed(1)}%
+            {data.totalPnl >= 0 ? "+" : ""}{pnlPct}%
           </span>
         </div>
       </div>
 
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase">WIN RATE</div>
-          <div className="text-3xl font-bold text-black mt-2">{data.winRate.toFixed(1)}%</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase">DRAWDOWN</div>
-          <div className="text-3xl font-bold text-red-600 mt-2">{data.currentDrawdown.toFixed(1)}%</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase">ACTIVE</div>
-          <div className="text-3xl font-bold text-black mt-2">{data.activePositions}</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase">EQUITY</div>
-          <div className="text-3xl font-bold text-black mt-2">${fmt(data.totalEquity)}</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase">REPUTATION</div>
-          <div className="text-3xl font-bold text-black mt-2">{data.reputationScore}</div>
-        </div>
+        {[
+          { label: "WIN RATE",   value: `${data.winRate.toFixed(1)}%`,        color: "" },
+          { label: "DRAWDOWN",   value: `${data.currentDrawdown.toFixed(1)}%`, color: "text-red-600" },
+          { label: "ACTIVE",     value: `${data.activePositions}`,             color: "" },
+          { label: "EQUITY",     value: `$${fmt(data.totalEquity)}`,           color: "" },
+          { label: "REPUTATION", value: `${data.reputationScore.toFixed(2)} ${trendIcon(data.reputationTrend) as any}`, color: "" },
+        ].map(k => (
+          <div key={k.label} className="bg-white border border-zinc-200 rounded-2xl p-6">
+            <div className="text-xs font-mono tracking-widest text-black uppercase">{k.label}</div>
+            <div className={`text-3xl font-bold mt-2 ${k.color || "text-black"}`}>{k.value}</div>
+          </div>
+        ))}
       </div>
 
+      {/* Stats row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">EQUITY CURVE</div>
-          
-          <div className="h-64 bg-white relative border border-zinc-100 rounded-xl overflow-hidden">
-            <div className="absolute inset-0 flex items-end px-4 pb-4 gap-1">
-              {equityData.map((value, i) => {
-                const height = ((value - minEquity) / (maxEquity - minEquity)) * 100
-                return (
-                  <div 
-                    key={i}
-                    className="flex-1 bg-green-500 rounded-t transition-all"
-                    style={{ height: `${height}%` }}
-                  />
-                )
-              })}
-            </div>
+        {/* Win/Loss */}
+        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
+          <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">TRADE SUMMARY</div>
+          <div className="space-y-3 text-base text-black">
+            <div>Resolved: <span className="font-bold">{data.resolvedTrades}</span></div>
+            <div>Wins: <span className="text-green-600 font-bold">{data.winCount}</span></div>
+            <div>Losses: <span className="text-red-600 font-bold">{data.lossCount}</span></div>
+            <div>Avg R/R: <span className="font-bold">{data.avgRR.toFixed(2)}</span></div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-            <div className="text-xs font-mono tracking-widest text-black uppercase">AVG R/R</div>
-            <div className="text-3xl font-bold text-black mt-2">{data.avgRR.toFixed(2)}</div>
+        {/* Best / Worst */}
+        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
+          <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">BEST / WORST</div>
+          <div className="space-y-3 text-base text-black">
+            <div>Best: <span className="text-green-600 font-bold">+${fmt(data.bestTrade)}</span></div>
+            <div>Worst: <span className="text-red-600 font-bold">-${fmt(Math.abs(data.worstTrade))}</span></div>
+            <div>Max DD: <span className="text-red-600 font-bold">{data.maxDrawdown.toFixed(1)}%</span></div>
           </div>
+        </div>
 
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-            <div className="text-xs font-mono tracking-widest text-black uppercase">BEST / WORST</div>
-            <div className="mt-4 space-y-2 text-sm text-black">
-              <div>Best: <span className="text-green-600">+${fmt(data.bestTrade)}</span></div>
-              <div>Worst: <span className="text-red-600">- ${fmt(Math.abs(data.worstTrade))}</span></div>
-            </div>
+        {/* Recent outcomes */}
+        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
+          <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">RECENT OUTCOMES</div>
+          <div className="space-y-2">
+            {data.recentOutcomes.length === 0 ? (
+              <div className="text-sm text-zinc-400 font-mono">no outcomes yet</div>
+            ) : data.recentOutcomes.map(t => (
+              <div key={t.id} className="flex justify-between text-sm font-mono">
+                <span className="text-zinc-500">{t.symbol}</span>
+                <span className={t.pnl >= 0 ? "text-green-600" : "text-red-600"}>
+                  {t.pnl >= 0 ? "+" : ""}{fmt(t.pnl)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">CURRENT REGIMES</div>
-          <div className="space-y-3 text-base text-black">
-            <div>BTCUSDT — trending • bullish • strong</div>
-            <div>ETHUSDT — ranging • neutral • medium</div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-          <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">RISK STATE</div>
-          <div className="space-y-3 text-base text-black">
-            <div>Leverage: {data.currentLeverage}x</div>
-            <div>Risk: {data.currentRiskPct}%</div>
-            <div>Size: ${fmt(data.latestPositionSize)}</div>
-          </div>
-        </div>
-      </div>
-
+      {/* Regimes */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-6">
-        <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">RECENT ACTIVITY</div>
-        <div className="grid grid-cols-2 gap-8 text-base text-black">
-          <div>Last 5 signals</div>
-          <div>Last 5 outcomes</div>
-        </div>
+        <div className="text-xs font-mono tracking-widest text-black uppercase mb-4">CURRENT REGIMES</div>
+        {Object.keys(data.regimes).length === 0 ? (
+          <div className="text-sm text-zinc-400 font-mono">no regime data</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(data.regimes).map(([symbol, r]) => (
+              <div key={symbol} className="border border-zinc-100 rounded-xl p-4">
+                <div className="text-sm font-mono font-bold text-black mb-2">{symbol}</div>
+                <div className="text-xs font-mono text-zinc-500 space-y-1">
+                  <div>direction: <span className="text-black">{r.direction ?? "—"}</span></div>
+                  <div className="flex gap-3 mt-2">
+                    <span className="text-green-600">L {(r.p_long * 100).toFixed(0)}%</span>
+                    <span className="text-red-500">S {(r.p_short * 100).toFixed(0)}%</span>
+                    <span className="text-zinc-400">N {(r.p_neutral * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
     </div>
