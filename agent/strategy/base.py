@@ -14,6 +14,7 @@ SL_PCT = 0.02  # 2% stop loss
 
 
 def _pf(symbol: str) -> str:
+    """Convert BTCUSDT -> PF_XBTUSD. Safe to call only once."""
     base = symbol.replace("USDT", "")
     base = "XBT" if base == "BTC" else base
     return f"PF_{base}USD"
@@ -106,16 +107,15 @@ class BaseStrategy(ABC):
     async def analyze(self, symbol: str) -> dict:
         ...
 
-    async def _exec(self, side: str, pair: str, volume: str, leverage: float, order_type: str = "market", price: float | None = None) -> dict:
-        pair = _pf(pair)
-
+    async def _exec(self, side: str, pf_pair: str, volume: str, leverage: float, order_type: str = "market", price: float | None = None) -> dict:
+        """Execute order. pf_pair must already be in PF_ format e.g. PF_XBTUSD."""
         if KRAKEN_PAPER_MODE:
             await _ensure_paper_init()
-            cmd = [KRAKEN_CLI_PATH, "futures", "paper", side, pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
+            cmd = [KRAKEN_CLI_PATH, "futures", "paper", side, pf_pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
             if price is not None:
                 cmd += ["--price", str(price)]
         else:
-            cmd = [KRAKEN_CLI_PATH, "futures", "order", side, pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
+            cmd = [KRAKEN_CLI_PATH, "futures", "order", side, pf_pair, volume, "--leverage", str(leverage), "--type", order_type, "-o", "json"]
             if price is not None:
                 cmd += ["--price", str(price)]
 
@@ -132,17 +132,16 @@ class BaseStrategy(ABC):
         return json.loads(stdout)
 
     async def open_position(self, decision: dict, price: float, reputation: float = 0.0, order_type: str = "market") -> dict:
-        pair     = decision["symbol"]
+        symbol   = decision["symbol"]           # e.g. BTCUSDT
+        pf_pair  = _pf(symbol)                  # e.g. PF_XBTUSD — converted once here
         action   = decision["action"]
         leverage = decision["leverage"]
         amount   = decision["amount_usd"]
         rr_ratio = decision["rr_ratio"]
 
-        # convert USD to contracts
         contracts = round(amount / price, 4)
         volume    = str(contracts)
 
-        # calculate SL and TP
         if action == "LONG":
             sl_price = round(price * (1 - SL_PCT), 8)
             tp_price = round(price * (1 + SL_PCT * rr_ratio), 8)
@@ -150,18 +149,18 @@ class BaseStrategy(ABC):
             sl_price = round(price * (1 + SL_PCT), 8)
             tp_price = round(price * (1 - SL_PCT * rr_ratio), 8)
 
-        # always sign intent regardless of paper/live
+        # always sign intent
         loop   = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, submit_trade_intent, pair, action, amount)
+        result = await loop.run_in_executor(None, submit_trade_intent, symbol, action, amount)
         if not result["approved"]:
-            logger.warning(f"[{pair}] TradeIntent rejected: {result.get('reason')}")
+            logger.warning(f"[{symbol}] TradeIntent rejected: {result.get('reason')}")
             return {"executed": False, "reason": result.get("reason")}
         intent_hash = result["intent_hash"]
 
-        # insert PENDING row BEFORE placing order to gate concurrent checks
+        # pre-insert PENDING to gate concurrent open count checks
         await _write_pending_outcome(
             intent_hash=intent_hash,
-            pair=_pf(pair),
+            pair=pf_pair,
             action=action,
             entry_price=price,
             amount_usd=amount,
@@ -177,14 +176,14 @@ class BaseStrategy(ABC):
 
         try:
             limit_price = price if order_type != "market" else None
-            order = await self._exec(side, pair, volume, leverage, order_type, price=limit_price)
-            logger.info(f"[{pair}] {'[PAPER] ' if KRAKEN_PAPER_MODE else ''}order placed: {order}")
+            order = await self._exec(side, pf_pair, volume, leverage, order_type, price=limit_price)
+            logger.info(f"[{symbol}] {'[PAPER] ' if KRAKEN_PAPER_MODE else ''}order placed: {order}")
 
-            # always post checkpoint regardless of paper/live
+            # always post checkpoint
             try:
                 cp = await loop.run_in_executor(None, lambda: post_checkpoint(
                     action=action,
-                    pair=pair,
+                    pair=symbol,
                     amount_usd=amount,
                     price=price,
                     reasoning=decision["explanation"],
@@ -193,7 +192,7 @@ class BaseStrategy(ABC):
                 ))
                 checkpoint_hash = cp["checkpoint_hash"]
             except Exception as e:
-                logger.error(f"[{pair}] checkpoint failed: {e}")
+                logger.error(f"[{symbol}] checkpoint failed: {e}")
                 checkpoint_hash = "FAILED"
                 cp = {}
 
@@ -215,18 +214,20 @@ class BaseStrategy(ABC):
 
         except Exception as e:
             err = str(e)
-            logger.error(f"[{pair}] order failed: {err}")
+            logger.error(f"[{symbol}] order failed: {err}")
             await _delete_pending_outcome(intent_hash)
             return {"executed": False, "reason": err}
 
     async def close_position(self, symbol: str, volume: str, intent_hash: str, exit_price: float, reason: str, order_type: str = "market") -> dict:
-        pair = _pf(symbol)
+        """Close a position. symbol must be in BTCUSDT format."""
+        pf_pair = _pf(symbol)  # converted once here, never again
         try:
-            order = await self._exec("sell", pair, volume, 1, order_type)
+            order = await self._exec("sell", pf_pair, volume, 1, order_type)
             logger.info(f"[{symbol}] {'[PAPER] ' if KRAKEN_PAPER_MODE else ''}position closed ({reason}): {order}")
 
-            # always sign close intent
             loop = asyncio.get_event_loop()
+
+            # always sign close intent
             try:
                 close_result = await loop.run_in_executor(None, submit_trade_intent, symbol, "CLOSE", 0)
                 close_hash   = close_result.get("intent_hash", "FAILED")
@@ -250,7 +251,7 @@ class BaseStrategy(ABC):
                 logger.error(f"[{symbol}] close checkpoint failed: {e}")
                 outcome_tx_hash = "FAILED"
 
-            # determine WIN/LOSS
+            # determine WIN/LOSS and update DB
             pool = await get_pool()
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(
@@ -259,11 +260,8 @@ class BaseStrategy(ABC):
                 )
                 if row:
                     entry  = float(row["entry_price"])
-                    action = row["action"]
-                    if action == "LONG":
-                        status = "WIN" if exit_price > entry else "LOSS"
-                    else:
-                        status = "WIN" if exit_price < entry else "LOSS"
+                    act    = row["action"]
+                    status = "WIN" if (act == "LONG" and exit_price > entry) or (act == "SHORT" and exit_price < entry) else "LOSS"
                 else:
                     status = "LOSS"
 
