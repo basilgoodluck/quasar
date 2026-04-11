@@ -1,5 +1,5 @@
 web3
-eth_account
+eth-account
 python-dotenv
 numpy
 pandas
@@ -13,3 +13,5 @@ fastapi
 torch
 redis
 authlib
+httpx
+websockets
