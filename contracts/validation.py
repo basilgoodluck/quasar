@@ -49,12 +49,10 @@ def post_checkpoint(
     )
     checkpoint_hash = _w3.keccak(encoded)
 
-    tx = registry.functions.postAttestation(
+    tx = registry.functions.postEIP712Attestation(
         AGENT_ID,
         checkpoint_hash,
         int(confidence * 100),
-        1,          # ProofType.EIP712
-        b"",        # empty proof bytes
         reasoning
     ).build_transaction({
         "from":     account.address,
@@ -94,12 +92,10 @@ def post_skip_checkpoint(
     )
     checkpoint_hash = _w3.keccak(encoded)
 
-    tx = registry.functions.postAttestation(
+    tx = registry.functions.postEIP712Attestation(
         AGENT_ID,
         checkpoint_hash,
         int(confidence * 100),
-        1,          # ProofType.EIP712
-        b"",        # empty proof bytes
         reason
     ).build_transaction({
         "from":     account.address,
@@ -146,12 +142,10 @@ def post_outcome_checkpoint(
     )
     checkpoint_hash = _w3.keccak(encoded)
 
-    tx = registry.functions.postAttestation(
+    tx = registry.functions.postEIP712Attestation(
         AGENT_ID,
         checkpoint_hash,
         int(confidence_at_entry * 100),
-        1,          # ProofType.EIP712
-        b"",        # empty proof bytes
         f"Outcome: {outcome}, PnL: {round(pnl_pct * 100, 4)}%"
     ).build_transaction({
         "from":     account.address,
