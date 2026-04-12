@@ -1,6 +1,6 @@
 export type Regime = "bull" | "bear" | "neutral"
 export type Decision = "approved" | "rejected" | "skipped"
-export type Side = "long" | "short"
+export type Side = "BUY" | "SELL"
 
 export interface AgentStatus {
   equity: number

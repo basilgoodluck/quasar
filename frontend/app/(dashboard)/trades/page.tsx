@@ -65,8 +65,7 @@ export default function TradesPage() {
   // Fetch symbols on mount
   useEffect(() => {
     api.trade.getSymbols()
-      .then((data: { symbol: string }[]) => {
-        const names = data.map(s => s.symbol)
+      .then((names: string[]) => {
         setSymbols(names)
         if (names.length > 0) setSelectedSymbol(names[0])
       })
@@ -394,9 +393,9 @@ export default function TradesPage() {
                       <td style={{ padding: "12px 10px", color: "#374151" }}>{t.symbol}</td>
                       <td style={{ padding: "12px 10px", color: t.side === "BUY" ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{t.side}</td>
                       <td style={{ padding: "12px 10px", color: "#6b7280" }}>{fmt(t.entry_price)}</td>
-                      <td style={{ padding: "12px 10px", color: "#6b7280" }}>{t.exit_price != null ? fmt(t.exit_price) : "—"}</td>
+                      <td style={{ padding: "12px 10px", color: "#6b7280" }}>{t.exit_price ? fmt(t.exit_price) : "—"}</td>
                       <td style={{ padding: "12px 10px", color: t.pnl >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600 }}>
-                        {t.pnl >= 0 ? "+" : ""}{fmt(t.pnl, 2)}
+                        {t.exit_price ? `${t.pnl >= 0 ? "+" : ""}${fmt(t.pnl, 2)}` : "—"}
                       </td>
                       <td style={{ padding: "12px 10px", color: "#6b7280" }}>${fmt(t.volume, 2)}</td>
                       <td style={{ padding: "12px 10px", color: "#6b7280" }}>{(t.confidence * 100).toFixed(0)}%</td>
