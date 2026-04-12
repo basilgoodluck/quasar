@@ -250,7 +250,7 @@ function Hero() {
               On-Chain Activity
             </a>
           </div>
-          <div className="flex flex-wrap gap-8 mt-14 pt-10 border-t border-gray-800 justify-center">
+          <div className="flex flex-wrap gap-6 sm:gap-8 mt-14 pt-10 border-t border-gray-800 justify-center">
             {landingData.heroStats.map((s: any) => (
               <div key={s.label} className="text-center">
                 <div className="text-2xl text-blue-400 font-bold">{s.value}</div>
@@ -279,37 +279,40 @@ function Hero() {
 function HowItWorks() {
   const steps = landingData.howItWorksSteps;
   return (
-    <section id="how" className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+    <section id="how" className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-white">
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">How It Works</h2>
-        <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900">How It Works</h2>
+        <p className="text-center text-gray-400 max-w-xl mx-auto mb-12 md:mb-16 text-sm sm:text-base leading-relaxed">
           Quasar operates a fully auditable decision pipeline — from raw market data to an on-chain checkpoint — with no human intervention required.
         </p>
-        <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-start">
+        <div className="grid md:grid-cols-2 gap-10 md:gap-16 items-start">
+          {/* Pipeline diagram — shown second on mobile, first on desktop */}
           <div className="relative flex justify-center order-2 md:order-1">
-            <div className="w-full max-w-md bg-gray-50 rounded-2xl border border-gray-200 p-6 text-sm font-mono">
+            <div className="w-full max-w-xs sm:max-w-sm md:max-w-md bg-gray-50 rounded-2xl border border-gray-200 p-4 md:p-6 font-mono text-sm">
               {["TradeDecision", "TradeIntent", "EIP-712 Signature", "RiskRouter Validation", "Execution", "Checkpoint"].map((s, i, arr) => (
                 <div key={s}>
-                  <div className="flex items-center gap-3 py-3">
+                  <div className="flex items-center gap-3 py-2.5 md:py-3">
                     <div className="w-7 h-7 rounded-full border border-blue-200 bg-blue-50 flex items-center justify-center text-blue-600 text-xs font-bold flex-shrink-0">
                       {String(i + 1).padStart(2, '0')}
                     </div>
-                    <span className="text-gray-700 text-base">{s}</span>
+                    <span className="text-gray-700 text-sm md:text-base min-w-0">{s}</span>
                   </div>
                   {i < arr.length - 1 && <div className="ml-3 text-blue-300 text-lg">↓</div>}
                 </div>
               ))}
             </div>
           </div>
-          <div className="flex flex-col space-y-10 order-1 md:order-2">
+
+          {/* Steps — shown first on mobile */}
+          <div className="flex flex-col space-y-8 md:space-y-10 order-1 md:order-2">
             {steps.map((step: any, index: number) => (
-              <div key={index} className="flex gap-5 flex-col">
-                <div className="flex items-baseline gap-4 text-2xl text-gray-200 leading-none font-black">
+              <div key={index} className="flex gap-4 flex-col">
+                <div className="flex items-baseline gap-3 text-xl md:text-2xl text-gray-200 leading-none font-black">
                   {step.number}.
-                  <h3 className="text-xl font-semibold text-gray-700">{step.title}</h3>
+                  <h3 className="text-lg md:text-xl font-semibold text-gray-700">{step.title}</h3>
                 </div>
-                <div className="pl-10">
-                  <p className="text-base text-gray-400 leading-relaxed">{step.description}</p>
+                <div className="pl-8 md:pl-10">
+                  <p className="text-sm md:text-base text-gray-400 leading-relaxed">{step.description}</p>
                 </div>
               </div>
             ))}
@@ -340,15 +343,15 @@ function MarketRegimes() {
   ];
 
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-gray-50">
+    <section className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-gray-50">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Market Regime Classification</h2>
-        <p className="text-center text-gray-400 max-w-2xl mx-auto mb-16 text-base leading-relaxed">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900">Market Regime Classification</h2>
+        <p className="text-center text-gray-400 max-w-2xl mx-auto mb-12 md:mb-16 text-sm sm:text-base leading-relaxed">
           Before evaluating any signal, Quasar classifies the current market into one of three regimes. The regime determines whether EMA trend-following or Fisher Transform reversal signals are trusted — and how aggressively the agent acts.
         </p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {regimes.map((r) => (
-            <div key={r.name} className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col gap-4 w-full max-w-sm">
+            <div key={r.name} className="bg-white rounded-2xl border border-gray-100 p-5 md:p-6 flex flex-col gap-4">
               <h3 className="font-bold text-gray-900 text-lg">{r.name}</h3>
               <p className="text-sm text-gray-500 leading-relaxed flex-1">{r.description}</p>
               <div className="flex flex-col gap-2 mt-auto">
@@ -367,42 +370,46 @@ function MarketRegimes() {
 function Features() {
   const features = landingData.features;
   return (
-    <section id="features" className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+    <section id="features" className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-white">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl text-center font-bold mb-4 text-gray-900">
+        <h2 className="text-2xl sm:text-3xl text-center font-bold mb-4 text-gray-900">
           ...your trades are on the record
         </h2>
-        <p className="text-center text-gray-400 max-w-xl mx-auto mb-10 text-base leading-relaxed">
+        <p className="text-center text-gray-400 max-w-xl mx-auto mb-10 text-sm sm:text-base leading-relaxed">
           Every action Quasar takes is logged, signed, and anchored on-chain. Audit any decision at any time — no dashboards that hide the truth.
         </p>
-        <div className="flex flex-col lg:flex-row items-center justify-center gap-10 lg:gap-16">
-          <div className="flex-1 w-full max-w-md space-y-7">
+
+        <div className="flex flex-col lg:flex-row items-start justify-center gap-8 lg:gap-16">
+          {/* Feature list */}
+          <div className="w-full lg:flex-1 lg:max-w-md space-y-5 md:space-y-7">
             {features.map((feature: string, index: number) => (
-              <div key={index} className="flex items-center space-x-4">
-                <div className="w-7 h-7 flex-shrink-0 bg-blue-600 rounded-full flex items-center justify-center">
+              <div key={index} className="flex items-start space-x-4">
+                <div className="w-7 h-7 flex-shrink-0 bg-blue-600 rounded-full flex items-center justify-center mt-0.5">
                   <Check size={15} className="text-white" />
                 </div>
-                <span className="text-lg text-gray-700">{feature}</span>
+                <span className="text-base text-gray-700 leading-snug">{feature}</span>
               </div>
             ))}
           </div>
-          <div className="flex-1 w-full max-w-md bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-200 bg-white">
-              <span className="text-sm text-gray-400 font-mono">checkpoints.jsonl</span>
+
+          {/* Code panel */}
+          <div className="w-full lg:flex-1 lg:max-w-md bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden min-w-0">
+            <div className="px-4 md:px-5 py-3 border-b border-gray-200 bg-white">
+              <span className="text-xs sm:text-sm text-gray-400 font-mono">checkpoints.jsonl</span>
             </div>
-            <div className="p-5 font-mono text-sm space-y-3">
+            <div className="p-4 md:p-5 font-mono text-xs sm:text-sm space-y-3">
               {[
                 { action: "BUY", pair: "BTCUSDT", conf: 0.81, status: "WIN", pnl: "+$22.78", regime: "trending" },
                 { action: "HOLD", pair: "ETHUSDT", conf: 0.44, status: "SKIP", pnl: "—", regime: "volatile" },
                 { action: "SELL", pair: "BTCUSDT", conf: 0.76, status: "WIN", pnl: "+$11.20", regime: "trending" },
               ].map((r, i) => (
-                <div key={i} className="border border-gray-200 rounded-xl p-4 space-y-2 bg-white">
-                  <div className="flex justify-between text-base">
+                <div key={i} className="border border-gray-200 rounded-xl p-3 md:p-4 space-y-2 bg-white">
+                  <div className="flex justify-between text-sm flex-wrap gap-1">
                     <span className="text-gray-900 font-bold">{r.action}</span>
                     <span className="text-gray-500">{r.pair}</span>
                     <span className="text-gray-500 font-semibold">{r.status}</span>
                   </div>
-                  <div className="flex gap-4 text-gray-400 text-sm flex-wrap">
+                  <div className="flex gap-3 text-gray-400 text-xs flex-wrap">
                     <span>regime <span className="text-gray-600 font-semibold">{r.regime}</span></span>
                     <span>conf <span className="text-gray-600 font-semibold">{r.conf}</span></span>
                     <span>pnl <span className="text-gray-700 font-semibold">{r.pnl}</span></span>
@@ -412,12 +419,13 @@ function Features() {
             </div>
           </div>
         </div>
-        <div className="md:w-4/5 mx-auto space-y-10 flex flex-col items-center mt-16">
-          <h3 className="text-center text-2xl text-gray-700 px-4 font-medium">
+
+        <div className="md:w-4/5 mx-auto space-y-8 md:space-y-10 flex flex-col items-center mt-12 md:mt-16">
+          <h3 className="text-center text-xl md:text-2xl text-gray-700 px-4 font-medium leading-snug">
             Every decision signed. Every trade verifiable. Every outcome recorded on-chain.
           </h3>
           <a href="/overview"
-            className="btn-slide btn-slide-dark bg-black text-white px-10 py-4 rounded-full font-bold text-base transition inline-flex items-center gap-2 active:scale-95">
+            className="btn-slide btn-slide-dark bg-black text-white px-8 md:px-10 py-4 rounded-full font-bold text-base transition inline-flex items-center gap-2 active:scale-95">
             <span>Access Dashboard</span>
             <ArrowRight size={18} />
           </a>
@@ -429,36 +437,37 @@ function Features() {
 
 function RiskManagement() {
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-gray-50">
+    <section className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-gray-50">
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Risk Management</h2>
-        <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900">Risk Management</h2>
+        <p className="text-center text-gray-400 max-w-xl mx-auto mb-12 md:mb-16 text-sm sm:text-base leading-relaxed">
           Quasar enforces strict risk controls at every layer — from position sizing to on-chain smart contract gates — so capital preservation is never optional.
         </p>
-        <div className="grid md:grid-cols-3 gap-6 md:gap-8">
-          <div className="bg-white rounded-2xl border border-gray-100 p-8">
+        {/* Changed from md:grid-cols-3 to lg:grid-cols-3 — 768px is too tight for 3 dense text columns */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 md:p-8">
             <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center mb-5">
               <TrendingUp size={20} className="text-white" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Kelly Criterion Sizing</h3>
+            <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Kelly Criterion Sizing</h3>
             <p className="text-gray-500 text-sm leading-relaxed">
               Each position size is derived from the Kelly formula — balancing expected return against variance to maximise long-run growth without risking ruin. A fractional Kelly is applied for added conservatism.
             </p>
           </div>
-          <div className="bg-white rounded-2xl border border-gray-100 p-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 md:p-8">
             <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center mb-5">
               <Shield size={20} className="text-white" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Drawdown Limits</h3>
+            <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Drawdown Limits</h3>
             <p className="text-gray-500 text-sm leading-relaxed">
               Hard drawdown limits are enforced at the model level and again at the RiskRouter smart contract level. No single bad run can compromise the account — both gates must pass before any trade executes.
             </p>
           </div>
-          <div className="bg-white rounded-2xl border border-gray-100 p-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 md:p-8 sm:col-span-2 lg:col-span-1">
             <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center mb-5">
               <Activity size={20} className="text-white" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Trade Frequency Controls</h3>
+            <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Trade Frequency Controls</h3>
             <p className="text-gray-500 text-sm leading-relaxed">
               Overtrading is a silent killer. Quasar enforces per-session and per-day frequency limits on-chain, preventing the agent from churning through capital during noisy or low-signal market conditions.
             </p>
@@ -471,15 +480,15 @@ function RiskManagement() {
 
 function LSTMSection() {
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+    <section className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div className="grid md:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-5">An agent that learns from its own history</h2>
-            <p className="text-gray-500 text-base leading-relaxed mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-5 leading-snug">An agent that learns from its own history</h2>
+            <p className="text-gray-500 text-sm sm:text-base leading-relaxed mb-6">
               After each trading session, Quasar retrains its LSTM model on a combined dataset of its own past decisions, their outcomes, and freshly scraped market data. The result is a model that improves with every iteration — not just on backtests, but on its live performance.
             </p>
-            <ul className="space-y-4">
+            <ul className="space-y-3 md:space-y-4">
               {[
                 "Trains on real trade outcomes, not simulated data",
                 "Scraped market data enriches each training cycle",
@@ -493,9 +502,11 @@ function LSTMSection() {
               ))}
             </ul>
           </div>
-          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-6 font-mono text-sm">
+
+          {/* Training loop panel */}
+          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4 md:p-6 font-mono text-xs sm:text-sm overflow-x-auto">
             <div className="text-gray-400 mb-4 text-xs uppercase tracking-widest">Training loop (simplified)</div>
-            <div className="space-y-3">
+            <div className="space-y-3 min-w-0">
               {[
                 "Load checkpoint history + outcomes",
                 "Scrape latest market features",
@@ -505,9 +516,9 @@ function LSTMSection() {
                 "Deploy updated model weights",
                 "Update confidence thresholds",
               ].map((step, i) => (
-                <div key={i} className="flex gap-3">
-                  <span className="text-blue-400">{i + 1}</span>
-                  <span className="text-gray-600">{step}</span>
+                <div key={i} className="flex gap-3 min-w-0">
+                  <span className="text-blue-400 flex-shrink-0">{i + 1}</span>
+                  <span className="text-gray-600 break-words">{step}</span>
                 </div>
               ))}
             </div>
@@ -521,23 +532,23 @@ function LSTMSection() {
 function WhyQuasar() {
   const reasons = landingData.whyQuasarReasons;
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+    <section className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-white">
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Why Quasar?</h2>
-        <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900">Why Quasar?</h2>
+        <p className="text-center text-gray-400 max-w-xl mx-auto mb-12 md:mb-16 text-sm sm:text-base leading-relaxed">
           Most trading bots are black boxes. Quasar is built from the ground up to be auditable, accountable, and self-correcting.
         </p>
-        <div className="space-y-14">
+        <div className="space-y-10 md:space-y-14">
           {reasons.map((r: any, i: number) => {
             const Icon = r.icon === "Shield" ? Shield : r.icon === "Zap" ? Zap : Eye;
             return (
-              <div key={i} className="flex items-start space-x-6">
-                <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                  <Icon size={22} className="text-white" />
+              <div key={i} className="flex items-start space-x-5 md:space-x-6">
+                <div className="flex-shrink-0 w-11 h-11 md:w-12 md:h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Icon size={20} className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">{r.title}</h3>
-                  <p className="text-base text-gray-500 leading-relaxed">{r.description}</p>
+                  <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2 md:mb-3">{r.title}</h3>
+                  <p className="text-sm md:text-base text-gray-500 leading-relaxed">{r.description}</p>
                 </div>
               </div>
             );
@@ -587,26 +598,26 @@ function FAQ() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-gray-50">
+    <section id="faq" className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-gray-50">
       <div className="max-w-3xl mx-auto">
-        <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Frequently Asked Questions</h2>
-        <p className="text-center text-gray-400 max-w-xl mx-auto mb-14 text-base leading-relaxed">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900">Frequently Asked Questions</h2>
+        <p className="text-center text-gray-400 max-w-xl mx-auto mb-10 md:mb-14 text-sm sm:text-base leading-relaxed">
           Everything you need to know about how Quasar works.
         </p>
-        <div className="space-y-3">
+        <div className="space-y-2 md:space-y-3">
           {faqs.map((faq, i) => (
             <div key={i} className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
               <button
                 onClick={() => setOpen(open === i ? null : i)}
-                className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-gray-50 transition"
+                className="w-full flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 text-left hover:bg-gray-50 transition"
               >
-                <span className="font-semibold text-gray-900 text-base">{faq.q}</span>
-                <span className={`ml-4 flex-shrink-0 transition-transform duration-200 ${open === i ? 'rotate-90' : ''}`}>
+                <span className="font-semibold text-gray-900 text-sm sm:text-base pr-4">{faq.q}</span>
+                <span className={`flex-shrink-0 transition-transform duration-200 ${open === i ? 'rotate-90' : ''}`}>
                   <ChevronRight size={18} className="text-gray-400" />
                 </span>
               </button>
               {open === i && (
-                <div className="px-6 pb-6">
+                <div className="px-4 sm:px-6 pb-5">
                   <p className="text-gray-500 text-sm leading-relaxed">{faq.a}</p>
                 </div>
               )}
@@ -620,26 +631,26 @@ function FAQ() {
 
 function CTA() {
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+    <section className="relative px-4 sm:px-6 md:px-12 py-16 md:py-24 bg-white">
       <div className="max-w-4xl mx-auto text-center">
-        <h2 className="text-4xl font-bold text-gray-900 mb-6">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-5 md:mb-6 leading-tight">
           Every decision.<br />On the record.
         </h2>
-        <p className="text-lg text-gray-400 mb-12 max-w-md mx-auto">
+        <p className="text-base md:text-lg text-gray-400 mb-10 md:mb-12 max-w-md mx-auto">
           Access the live dashboard and verify every trade on-chain.
         </p>
-        <div className="flex flex-wrap justify-center gap-4">
+        <div className="flex flex-wrap justify-center gap-3 md:gap-4">
           <a href="https://sepolia.etherscan.io/address/0x26691C1e42aB79416FEa3AaAed240e7751bF9f6F" target="_blank" rel="noopener noreferrer"
-            className="btn-slide btn-slide-dark bg-black text-white px-8 py-4 rounded-full font-bold text-base transition inline-flex items-center gap-2 active:scale-95">
+            className="btn-slide btn-slide-dark bg-black text-white px-7 md:px-8 py-3.5 md:py-4 rounded-full font-bold text-sm md:text-base transition inline-flex items-center gap-2 active:scale-95">
             <span>On-Chain Activity</span>
             <ArrowRight size={18} />
           </a>
           <a href="https://early.surge.xyz/discovery/quasar?ref=rqkM2dQEqKW2puaPZd6ob" target="_blank" rel="noopener noreferrer"
-            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-8 py-4 rounded-full text-base transition">
+            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-7 md:px-8 py-3.5 md:py-4 rounded-full text-sm md:text-base transition">
             View Surge Profile
           </a>
           <a href="https://github.com/basilgoodluck/quasar" target="_blank" rel="noopener noreferrer"
-            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-8 py-4 rounded-full text-base transition">
+            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-7 md:px-8 py-3.5 md:py-4 rounded-full text-sm md:text-base transition">
             View Code
           </a>
         </div>
@@ -674,9 +685,9 @@ function Footer() {
   ];
 
   return (
-    <footer ref={ref} className="relative py-16 md:py-20 text-gray-500 border-t border-gray-100 bg-white">
+    <footer ref={ref} className="relative py-14 md:py-20 text-gray-500 border-t border-gray-100 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col lg:flex-row gap-12 lg:gap-20">
+        <div className="flex flex-col lg:flex-row gap-10 lg:gap-20">
           <motion.div
             initial={{ opacity: 0, x: -60 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
@@ -689,7 +700,7 @@ function Footer() {
               </div>
               <span className="text-gray-900 font-bold tracking-wide text-2xl">Quasar</span>
             </div>
-            <div className="flex gap-6">
+            <div className="flex gap-5">
               {social.map((s, index) => (
                 <a 
                   key={index} 
@@ -699,7 +710,7 @@ function Footer() {
                   className="text-gray-400 hover:text-gray-900 transition-colors"
                   aria-label={s.label}
                 >
-                  <s.Icon size={24} />
+                  <s.Icon size={22} />
                 </a>
               ))}
             </div>
@@ -709,10 +720,11 @@ function Footer() {
             initial={{ opacity: 0, y: 50 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="flex flex-col sm:flex-row gap-10 lg:gap-16 flex-1"
+            // Changed from sm:flex-row — fires too early at 640px when combined with parent stacking
+            className="flex flex-col sm:flex-row gap-8 md:gap-10 lg:gap-16 flex-1"
           >
             <div>
-              <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Product</div>
+              <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-4 md:mb-5">Product</div>
               <ul className="space-y-3">
                 {productLinks.map((link) => (
                   <li key={link.text}>
@@ -725,7 +737,7 @@ function Footer() {
             </div>
 
             <div>
-              <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Stack</div>
+              <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-4 md:mb-5">Stack</div>
               <div className="space-y-2 text-sm text-gray-400">
                 {stack.map((s, i) => (
                   <div key={i}>{s}</div>
@@ -739,7 +751,7 @@ function Footer() {
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.4, delay: 0.5 }}
-          className="mt-16 pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400"
+          className="mt-12 md:mt-16 pt-8 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs sm:text-sm text-gray-400 text-center sm:text-left"
         >
           <p>© 2026 Quasar. All rights reserved.</p>
           <p>Trading involves risk. Use at your own discretion.</p>
