@@ -29,3 +29,4 @@ dist/
 .vscode/
 .idea/
 models/
+setup_local.py

@@ -12,18 +12,73 @@
 
 ---
 
-### Documentation
+### How it works
 
-| Doc | What it covers |
-|-----|---------------|
-| [Architecture](docs/architecture.md) | How all services connect and data flows |
-| [Strategy](docs/strategy.md) | ARC strategy — regime, Fisher, MA, structure |
-| [Risk](docs/risk.md) | Kelly sizing, drawdown, leverage, concurrency |
-| [Database](docs/database.md) | Schema, fields, what gets stored and when |
-| [Contracts](docs/contracts.md) | On-chain intent signing and checkpoints |
-| [Monitor](docs/monitor.md) | How open positions are watched and closed |
-| [API](docs/api.md) | Backend endpoints and response shapes |
-| [Deployment](docs/deployment.md) | Docker setup, env vars, running the system |
+Quasar runs a continuous loop across 19 crypto pairs. For each symbol it classifies the current market regime using a trained model — if the market is ranging or purely chaotic, it skips. If a directional regime is detected, it checks two indicators (EMA and Fisher Transform) and validates that price is in a sensible position within its recent swing range. If everything lines up, it asks OpenAI for a second opinion. A veto kills the trade silently. Approval triggers a signed on-chain intent, an order on Kraken Futures, and a checkpoint posted to the chain. A separate monitor process then watches the open position every 30 seconds and closes it when the stop loss, take profit, or 1-hour timeout is hit.
+
+---
+
+### Quick start
+
+```bash
+# clone
+git clone https://github.com/basilgoodluck/quasar.git
+cd quasar
+
+# set environment variables
+cp .env.example .env
+# edit .env with your keys
+
+# start everything
+docker compose up -d
+
+# verify all containers are running
+docker ps
+
+# follow the agent
+docker logs -f quasar-agent
+```
+
+To run in paper trading mode (no real money), set `KRAKEN_PAPER_MODE=true` in your `.env`. The paper account is initialised automatically with a $10,000 balance. Switch to `false` for live trading.
+
+---
+
+### Project structure
+
+```
+quasar/
+├── agent/
+│   ├── main.py               # trading loop — iterates symbols, calls strategy
+│   ├── monitor.py            # watches open positions, triggers closes
+│   ├── features.py           # OHLCV fetching
+│   ├── regime.py             # regime detection
+│   ├── reputation.py         # reputation score
+│   ├── ai_advisor.py         # OpenAI trade review
+│   ├── collector.py          # candle collection loop
+│   ├── train.py              # regime model training
+│   └── strategy/
+│       ├── base.py           # BaseStrategy — open/close/exec
+│       ├── arc.py            # ARC strategy — indicators + entry logic
+│       └── risk.py           # Kelly sizing, drawdown, leverage
+├── contracts/
+│   ├── router.py             # trade intent signing
+│   ├── validation.py         # checkpoint posting
+│   └── vault.py              # available capital
+├── database/
+│   └── connection.py         # asyncpg pool
+├── frontend/                 # Next.js dashboard
+├── main.py                   # FastAPI backend
+├── docker-compose.yml
+└── docs/
+    ├── architecture.md
+    ├── strategy.md
+    ├── risk.md
+    ├── database.md
+    ├── contracts.md
+    ├── monitor.md
+    ├── api.md
+    └── deployment.md
+```
 
 ---
 
@@ -36,3 +91,18 @@
 - **Database** — PostgreSQL 15
 - **Cache** — Redis 7
 - **Infra** — Docker Compose
+
+---
+
+### Documentation
+
+| Doc | What it covers |
+|-----|---------------|
+| [Architecture](docs/architecture.md) | How all services connect and data flows |
+| [Strategy](docs/strategy.md) | ARC strategy — regime, Fisher, MA, structure |
+| [Risk](docs/risk.md) | Kelly sizing, drawdown, leverage, concurrency |
+| [Database](docs/database.md) | Schema, fields, what gets stored and when |
+| [Contracts](docs/contracts.md) | On-chain intent signing and checkpoints |
+| [Monitor](docs/monitor.md) | How open positions are watched and closed |
+| [API](docs/api.md) | Backend endpoints and response shapes |
+| [Deployment](docs/deployment.md) | Docker setup, env vars, running the system |
