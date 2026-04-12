@@ -25,10 +25,12 @@ async function request<T>(
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
+
   if (!res.ok) {
     const error = await res.text().catch(() => res.statusText)
     throw new Error(`${method} ${endpoint} failed [${res.status}]: ${error}`)
   }
+
   return res.json() as Promise<T>
 }
 
@@ -46,5 +48,9 @@ export const api = {
       api.get<unknown[][]>(
         `/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
       ),
+  },
+
+  trade: {
+    getSymbols: () => api.get<string[]>("/api/trade/symbols"),
   },
 }

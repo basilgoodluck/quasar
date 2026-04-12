@@ -4,6 +4,7 @@ from agent.regime import detect_regime
 from agent.strategy.risk import compute_risk
 from agent.features import fetch_ohlcv, INTERVAL
 from agent.reputation import get_reputation_score
+from agent.ai_advisor import ai_trade_review
 from config import STRUCTURE_LOOKBACK, ARC_FISHER_PERIOD
 from logger import get_logger
 
@@ -224,13 +225,9 @@ class ARCStrategy(BaseStrategy):
         # Fisher at multi-candle extreme overrides regime direction.
         # Checked first because it is a stronger signal.
         if fisher["reversal_long"] and not ma["above"]:
-            # Price below EMA (still in downtrend) but Fisher
-            # is at an extreme low — genuine oversold reversal
             action, direction, entry_type = "LONG", "long", "reversal"
 
         elif fisher["reversal_short"] and ma["above"]:
-            # Price above EMA (still in uptrend) but Fisher
-            # is at an extreme high — genuine overbought reversal
             action, direction, entry_type = "SHORT", "short", "reversal"
 
         # --- TREND FOLLOWING entries (regime gates direction) ---
@@ -261,6 +258,34 @@ class ARCStrategy(BaseStrategy):
                 confidence=confidence, post_on_chain=True,
             )
 
+        # --- AI TRADE REVIEW ---
+        # All rule-based gates passed. Ask OpenAI for a second opinion.
+        # A veto skips the trade but does NOT post on-chain (no gas wasted).
+        # If AI is unavailable, defaults to approve=True with adj=0.0 and
+        # a clear error message so the explanation is never misleadingly empty.
+        ai_review = await ai_trade_review(
+            symbol=symbol,
+            action=action,
+            entry_type=entry_type,
+            regime=regime,
+            ma=ma,
+            fisher=fisher,
+            structure=structure,
+            params=params,
+            reputation=reputation,
+        )
+
+        if not ai_review["approve"]:
+            return self.skip(
+                symbol,
+                (
+                    f"SKIP {symbol}: {regime_summary} | action={action} entry_type={entry_type} "
+                    f"— AI review vetoed: {ai_review['reason']}"
+                ),
+                confidence=confidence, post_on_chain=False,
+            )
+
+        # Original explanation preserved exactly — AI appended cleanly at the end
         explanation = (
             f"TRADE {symbol} {action} ({entry_type}): {regime_summary} | "
             f"reputation={reputation:.4f} | "
@@ -269,7 +294,8 @@ class ARCStrategy(BaseStrategy):
             f"amount=${params['amount_usd']} | "
             f"{structure['note']} | "
             f"{ma['note']} | "
-            f"{fisher['note']}"
+            f"{fisher['note']} | "
+            f"ai=approved adj={ai_review['confidence_adjustment']:+.2f} — {ai_review['reason']}"
         )
 
         return {
@@ -279,10 +305,11 @@ class ARCStrategy(BaseStrategy):
             "leverage":    params["leverage"],
             "risk_pct":    params["risk_pct"],
             "rr_ratio":    params["rr_ratio"],
-            "amount_usd":  params["amount_usd"],  # FIX: pass through pre-computed amount
+            "amount_usd":  params["amount_usd"],
             "explanation": explanation,
             "regime":      regime,
             "structure":   structure,
             "reputation":  reputation,
+            "ai_review":   ai_review,
             "ready":       True,
         }

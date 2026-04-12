@@ -56,7 +56,7 @@ async def get_reputation_score() -> float:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT status, confidence_at_entry
+            SELECT status, confidence_at_entry, regime, entry_type, trend_direction
             FROM trade_outcomes
             WHERE status IN ('WIN', 'LOSS', 'NEUTRAL')
             ORDER BY created_at DESC
@@ -89,7 +89,51 @@ async def get_reputation_score() -> float:
         f"[reputation] score={score} win_rate={win_rate:.2f} "
         f"consistency={consistency:.2f} streak={streak} trades={total}"
     )
+
+    # --- AI REPUTATION INSIGHT ---
+    # Run in background — never block score return on AI availability.
+    # The insight is logged and cached for the strategy to optionally read.
+    try:
+        from agent.ai_advisor import ai_reputation_insight
+        trade_rows = [dict(r) for r in rows]
+        asyncio.create_task(
+            _run_and_cache_insight(score, win_rate, consistency, streak, trade_rows)
+        )
+    except Exception as e:
+        logger.warning(f"[reputation] failed to schedule AI insight: {e}")
+
     return score
+
+
+# Module-level cache so arc.py can read the latest insight without waiting
+_latest_insight: dict = {"avoid_conditions": [], "prefer_conditions": [], "summary": ""}
+
+
+async def _run_and_cache_insight(
+    score: float,
+    win_rate: float,
+    consistency: float,
+    streak: int,
+    trade_rows: list[dict],
+):
+    global _latest_insight
+    from agent.ai_advisor import ai_reputation_insight
+    insight = await ai_reputation_insight(
+        score=score,
+        win_rate=win_rate,
+        consistency=consistency,
+        streak=streak,
+        trade_rows=trade_rows,
+    )
+    _latest_insight = insight
+
+
+def get_latest_insight() -> dict:
+    """
+    Returns the most recently computed AI reputation insight.
+    Safe to call from arc.py — returns empty bias if insight not yet computed.
+    """
+    return _latest_insight
 
 
 async def save_reputation_snapshot(score: float, outcome_ref: bytes = None):
