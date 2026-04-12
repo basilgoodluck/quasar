@@ -1,15 +1,22 @@
 # services/trade.py
 import time
 from datetime import datetime, timezone
+from decimal import Decimal
+
+
+def to_float(v) -> float:
+    if v is None:
+        return 0.0
+    return float(v)
 
 
 def format_trade(r: dict) -> dict:
     created_at = r["created_at"]
     dt = datetime.fromtimestamp(created_at, tz=timezone.utc) if isinstance(created_at, (int, float)) else created_at
 
-    entry  = float(r["entry_price"]) if r["entry_price"] else 0.0
-    exit_  = float(r["exit_price"])  if r["exit_price"]  else 0.0
-    amount = float(r["amount_usd"])  if r["amount_usd"]  else 0.0
+    entry  = to_float(r["entry_price"])
+    exit_  = to_float(r["exit_price"])
+    amount = to_float(r["amount_usd"])
 
     if entry and exit_:
         pct = (exit_ - entry) / entry if r["action"] == "LONG" else (entry - exit_) / entry
@@ -24,7 +31,7 @@ def format_trade(r: dict) -> dict:
         "entry_price": entry,
         "exit_price":  exit_,
         "pnl":         pnl,
-        "confidence":  float(r["confidence_at_entry"]) if r["confidence_at_entry"] else 0.0,
+        "confidence":  to_float(r["confidence_at_entry"]),
         "decision":    "approved" if r["status"] in ("PENDING", "WIN", "LOSS", "NEUTRAL") else "skipped",
         "timestamp":   dt.isoformat(),
         "hour":        dt.hour,
@@ -79,13 +86,13 @@ async def get_dashboard_overview(db=None) -> dict:
     rr_list   = []
 
     for r in rows:
-        if r["exit_price"] and r["entry_price"] and r["status"] != "PENDING":
-            pct = (
-                (r["exit_price"] - r["entry_price"]) / r["entry_price"]
-                if r["action"] == "LONG"
-                else (r["entry_price"] - r["exit_price"]) / r["entry_price"]
-            )
-            pnl       = float(r["amount_usd"]) * pct
+        entry  = to_float(r["entry_price"])
+        exit_  = to_float(r["exit_price"])
+        amount = to_float(r["amount_usd"])
+
+        if entry and exit_ and r["status"] != "PENDING":
+            pct = (exit_ - entry) / entry if r["action"] == "LONG" else (entry - exit_) / entry
+            pnl       = amount * pct
             total_pnl = round(total_pnl + pnl, 4)
             equity   += pnl
             pnl_list.append(pnl)
@@ -94,28 +101,25 @@ async def get_dashboard_overview(db=None) -> dict:
             drawdown = round((peak - equity) / peak * 100, 4) if peak > 0 else 0.0
             if drawdown > max_dd:
                 max_dd = drawdown
+
         if r["rr_ratio"]:
-            rr_list.append(float(r["rr_ratio"]))
+            rr_list.append(to_float(r["rr_ratio"]))
 
     best_trade  = max(pnl_list) if pnl_list else 0.0
     worst_trade = min(pnl_list) if pnl_list else 0.0
     avg_rr      = round(sum(rr_list) / len(rr_list), 4) if rr_list else 0.0
 
     # Reputation
-    rep_row = await db.fetchrow("""
-        SELECT score FROM reputation_history ORDER BY recorded_at DESC LIMIT 1
-    """)
-    rep_prev = await db.fetchrow("""
-        SELECT score FROM reputation_history ORDER BY recorded_at DESC LIMIT 1 OFFSET 1
-    """)
-    reputation = float(rep_row["score"]) if rep_row else 0.0
+    rep_row = await db.fetchrow("SELECT score FROM reputation_history ORDER BY recorded_at DESC LIMIT 1")
+    rep_prev = await db.fetchrow("SELECT score FROM reputation_history ORDER BY recorded_at DESC LIMIT 1 OFFSET 1")
+    reputation = to_float(rep_row["score"]) if rep_row else 0.0
     if rep_prev:
-        prev = float(rep_prev["score"])
+        prev = to_float(rep_prev["score"])
         rep_trend = "up" if reputation > prev else ("down" if reputation < prev else "flat")
     else:
         rep_trend = "flat"
 
-    # Regimes from latest snapshots per symbol
+    # Regimes
     regime_rows = await db.fetch("""
         SELECT DISTINCT ON (symbol) symbol, direction, p_long, p_short, p_neutral
         FROM snapshots
@@ -124,9 +128,9 @@ async def get_dashboard_overview(db=None) -> dict:
     regimes = {
         r["symbol"]: {
             "direction": r["direction"],
-            "p_long":    float(r["p_long"])    if r["p_long"]    else 0.0,
-            "p_short":   float(r["p_short"])   if r["p_short"]   else 0.0,
-            "p_neutral": float(r["p_neutral"]) if r["p_neutral"] else 0.0,
+            "p_long":    to_float(r["p_long"]),
+            "p_short":   to_float(r["p_short"]),
+            "p_neutral": to_float(r["p_neutral"]),
         }
         for r in regime_rows
     }
@@ -143,7 +147,7 @@ async def get_dashboard_overview(db=None) -> dict:
 
     # Symbols traded
     sym_rows = await db.fetch("SELECT DISTINCT pair FROM trade_outcomes")
-    symbols_traded = [r["symbol"] for r in sym_rows] if sym_rows else []
+    symbols_traded = [r["pair"] for r in sym_rows]
 
     return {
         "totalPnl":        round(total_pnl, 4),
