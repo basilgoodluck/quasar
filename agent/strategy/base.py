@@ -3,7 +3,7 @@ import json
 import time
 from abc import ABC, abstractmethod
 from contracts.router import submit_trade_intent
-from contracts.validation import post_checkpoint, post_skip_checkpoint
+from contracts.validation import post_checkpoint
 from database.connection import get_pool
 from config import KRAKEN_CLI_PATH, KRAKEN_PAPER_MODE
 from logger import get_logger
@@ -87,12 +87,7 @@ async def _ensure_paper_init():
 
 class BaseStrategy(ABC):
 
-    def skip(self, symbol: str, reason: str, confidence: float = 0.0, post_on_chain: bool = False) -> dict:
-        try:
-            post_skip_checkpoint(pair=symbol, reason=reason, confidence=confidence)
-        except Exception as e:
-            logger.error(f"[{symbol}] SKIP checkpoint failed: {e}")
-
+    def skip(self, symbol: str, reason: str, confidence: float = 0.0) -> dict:
         return {
             "symbol":      symbol,
             "action":      "SKIP",

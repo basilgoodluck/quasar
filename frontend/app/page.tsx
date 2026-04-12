@@ -1,10 +1,9 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, X, ArrowRight, Check, Shield, Zap, Eye, Brain, TrendingUp, Lock, Activity, ChevronRight } from 'lucide-react';
+import { Menu, X, ArrowRight, Check, Shield, Zap, Eye, TrendingUp, Activity, ChevronRight } from 'lucide-react';
 import { motion, useInView } from 'framer-motion';
 import Link from 'next/link';
 import Head from 'next/head';
-import { BASE_URL } from '@/lib/api';
 import landingData from '@/data/landing.json';
 
 const NAV_HEIGHT = 74;
@@ -13,8 +12,8 @@ function SEO() {
   return (
     <Head>
       <title>Quasar – On-Chain AI Trading Agent | Verifiable, Transparent, Self-Improving</title>
-      <meta name="description" content="Quasar is a trustless on-chain AI trading agent. It classifies market regimes, uses EMA and Fisher Transform signals, trains an LSTM model on its own decisions, enforces risk via smart contracts, and uses a reputation scoring system to dynamically control exposure. Every action is EIP-712 signed and verifiable on Sepolia." />
-      <meta name="keywords" content="on-chain trading agent, AI trading bot, EIP-712, smart contract trading, LSTM trading model, Kelly criterion, reputation scoring, verifiable trading, DeFi agent, Sepolia testnet, transparent trading" />
+      <meta name="description" content="Quasar is a trustless on-chain AI trading agent. It classifies market regimes, uses EMA and Fisher Transform signals, trains an LSTM model on its own decisions, enforces risk via smart contracts. Every action is EIP-712 signed and verifiable on Sepolia." />
+      <meta name="keywords" content="on-chain trading agent, AI trading bot, EIP-712, smart contract trading, LSTM trading model, Kelly criterion, verifiable trading, DeFi agent, Sepolia testnet, transparent trading" />
       <meta property="og:title" content="Quasar – On-Chain AI Trading Agent" />
       <meta property="og:description" content="A self-improving trading agent with on-chain identity, EIP-712 signed decisions, and smart contract risk enforcement. Every trade is verifiable. Nothing is a black box." />
       <meta property="og:type" content="website" />
@@ -95,7 +94,7 @@ function Header() {
               ))}
             </motion.div>
             <motion.a
-              href={`${BASE_URL}/auth/google`}
+              href="/overview"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.18, duration: 0.25 }}
@@ -120,7 +119,7 @@ function Header() {
               {link.label}
             </a>
           ))}
-          <a href={`${BASE_URL}/auth/google`}
+          <a href="/overview"
             className="btn-slide btn-slide-dark mt-4 bg-black text-white px-10 py-4 rounded-full font-bold text-lg">
             Launch Agent
           </a>
@@ -225,7 +224,7 @@ function Hero() {
             A trustless trading agent that classifies market regimes, learns from its own decisions via LSTM, and enforces every trade through EIP-712 signed smart contract risk controls. Every decision is verifiable. Nothing is a black box.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <a href={`${BASE_URL}/auth/google`}
+            <a href="/overview"
               className="btn-slide btn-slide-dark bg-white text-black px-8 py-4 rounded-full font-bold text-base transition active:scale-95">
               View Live Agent →
             </a>
@@ -308,27 +307,23 @@ function MarketRegimes() {
   const regimes = [
     {
       name: "Trending",
-      description: "Strong directional momentum. Quasar increases conviction on EMA continuation signals and sizes positions more aggressively within Kelly limits.",
-      signals: ["EMA crossover confirmed", "ADX > 25", "Low mean-reversion probability"],
-      color: "blue",
+      description: "Strong directional order flow. CVD is rising consistently, buy aggression is elevated, and open interest confirms positioning. EMA trend-following signals are trusted. Fisher Transform reversals are monitored but deprioritised.",
+      signals: ["CVD slope confirmed", "Buy aggression elevated", "OI expanding"],
     },
     {
       name: "Volatile",
-      description: "High price variance with no clear direction. Position sizes are reduced and frequency controls tighten. The agent waits for confirmation before acting.",
-      signals: ["ATR spike detected", "Fisher Transform neutral", "Drawdown guard active"],
-      color: "yellow",
+      description: "High price variance with no clear direction. Realised volatility and HL range are spiking, CVD is flipping frequently. Both EMA and Fisher Transform signals are treated with scepticism. The agent waits for confirmation before acting.",
+      signals: ["Realised vol spike", "CVD flipping", "Liquidation imbalance low"],
     },
     {
       name: "Trending Volatile",
-      description: "Momentum exists but with elevated noise. EMA signals are weighted lower. Fisher Transform reversals are monitored closely for early exit triggers.",
-      signals: ["EMA signal present", "ATR elevated", "Hybrid risk model active"],
-      color: "purple",
+      description: "Directional momentum exists but with elevated noise. EMA continuation signals are weighted lower. Fisher Transform reversals are monitored closely as early exit triggers. A hybrid risk model applies.",
+      signals: ["CVD slope present", "Realised vol elevated", "Hybrid risk model active"],
     },
     {
       name: "Ranging",
-      description: "Sideways price action. Trend signals are ignored. The agent focuses on mean-reversion opportunities and reduces trade frequency significantly.",
-      signals: ["ADX < 20", "Price within Bollinger bands", "Minimal EMA divergence"],
-      color: "gray",
+      description: "Sideways price action with weak order flow. EMA trend signals are ignored entirely. Fisher Transform reversal signals take priority. Trade frequency is significantly reduced.",
+      signals: ["CVD slope near zero", "Low return slope", "Fisher Transform prioritised"],
     },
   ];
 
@@ -337,7 +332,7 @@ function MarketRegimes() {
       <div className="max-w-7xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Market Regime Classification</h2>
         <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
-          Before evaluating any signal, Quasar classifies the current market into one of four regimes and adapts its entire strategy accordingly.
+          Before evaluating any signal, Quasar classifies the current market into one of four regimes. The regime determines whether EMA trend-following or Fisher Transform reversal signals are trusted — and how aggressively the agent acts.
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {regimes.map((r) => (
@@ -409,7 +404,7 @@ function Features() {
           <h3 className="text-center text-2xl text-gray-700 px-4 font-medium">
             Every decision signed. Every trade verifiable. Every outcome recorded on-chain.
           </h3>
-          <a href={`${BASE_URL}/auth/google`}
+          <a href="/overview"
             className="btn-slide btn-slide-dark bg-black text-white px-10 py-4 rounded-full font-bold text-base transition inline-flex items-center gap-2 active:scale-95">
             <span>Access Dashboard</span>
             <ArrowRight size={18} />
@@ -489,136 +484,20 @@ function LSTMSection() {
           <div className="bg-gray-50 rounded-2xl border border-gray-200 p-6 font-mono text-sm">
             <div className="text-gray-400 mb-4 text-xs uppercase tracking-widest">Training loop (simplified)</div>
             <div className="space-y-3">
-              <div className="flex gap-3">
-                <span className="text-blue-400">1</span>
-                <span className="text-gray-600">Load checkpoint history + outcomes</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-blue-400">2</span>
-                <span className="text-gray-600">Scrape latest market features</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-blue-400">3</span>
-                <span className="text-gray-600">Merge into training dataset</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-blue-400">4</span>
-                <span className="text-gray-600">Retrain LSTM on full sequence</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-blue-400">5</span>
-                <span className="text-gray-600">Validate on held-out period</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-blue-400">6</span>
-                <span className="text-gray-600">Deploy updated model weights</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-blue-400">7</span>
-                <span className="text-gray-600">Update confidence thresholds</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ReputationScore() {
-  const components = [
-    {
-      label: "Win Rate",
-      weight: "40%",
-      description: "Overall accuracy across the last 100 resolved trades. The baseline signal of whether the agent's decisions are profitable.",
-      bar: 78,
-    },
-    {
-      label: "Decision Consistency",
-      weight: "40%",
-      description: "Measures reliability when operating with high confidence. Incorrect high-confidence calls are penalised more heavily than low-confidence misses.",
-      bar: 64,
-    },
-    {
-      label: "Streak Component",
-      weight: "20%",
-      description: "Rewards sustained performance over time. A winning streak boosts the score; a losing streak reduces it, encouraging stable execution over erratic bursts.",
-      bar: 55,
-    },
-  ];
-
-  return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-24 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-16 items-start">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-5">Performance earns trust. Trust earns exposure.</h2>
-            <p className="text-gray-500 text-base leading-relaxed mb-8">
-              Before every trade, Quasar evaluates its own recent performance and assigns a reputation score between 0.0 and 1.0. This score directly controls how aggressively the agent is allowed to participate — low reputation reduces exposure, high reputation unlocks it.
-            </p>
-            <div className="space-y-6">
-              {components.map((c) => (
-                <div key={c.label}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-semibold text-gray-800">{c.label}</span>
-                    <span className="text-xs text-gray-400 font-mono">{c.weight} weight</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                    <div className="bg-gray-700 h-1.5 rounded-full" style={{ width: `${c.bar}%` }} />
-                  </div>
-                  <p className="text-xs text-gray-400 leading-relaxed">{c.description}</p>
+              {[
+                "Load checkpoint history + outcomes",
+                "Scrape latest market features",
+                "Merge into training dataset",
+                "Retrain LSTM on full sequence",
+                "Validate on held-out period",
+                "Deploy updated model weights",
+                "Update confidence thresholds",
+              ].map((step, i) => (
+                <div key={i} className="flex gap-3">
+                  <span className="text-blue-400">{i + 1}</span>
+                  <span className="text-gray-600">{step}</span>
                 </div>
               ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-5">
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <div className="text-xs text-gray-400 uppercase tracking-widest font-semibold mb-4">Current reputation score</div>
-              <div className="flex items-end gap-4 mb-4">
-                <span className="text-5xl font-black text-gray-900">0.74</span>
-                <span className="text-sm text-gray-400 mb-2">/ 1.0</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
-                <div className="bg-gray-700 h-2 rounded-full" style={{ width: '74%' }} />
-              </div>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="text-sm font-bold text-gray-900">78%</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Win rate</div>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="text-sm font-bold text-gray-900">0.81</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Consistency</div>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="text-sm font-bold text-gray-900">+6</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Win streak</div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <div className="text-xs text-gray-400 uppercase tracking-widest font-semibold mb-5">How score controls behaviour</div>
-              <div className="space-y-4">
-                {[
-                  { range: "0.0 – 0.4", label: "Restricted", desc: "Minimal exposure. 1 concurrent position max. Smallest Kelly fraction." },
-                  { range: "0.4 – 0.7", label: "Moderate", desc: "Standard participation. 2–3 positions. Normal Kelly sizing." },
-                  { range: "0.7 – 1.0", label: "Full access", desc: "Unrestricted positions. Scaled Kelly. Aggressive participation allowed." },
-                ].map((tier) => (
-                  <div key={tier.range} className="flex items-start gap-3">
-                    <span className="text-xs font-bold px-2 py-1 rounded-md flex-shrink-0 bg-gray-100 text-gray-600">{tier.range}</span>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-800">{tier.label}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{tier.desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 flex items-start gap-3">
-              <Lock size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Each score is recorded locally and submitted on-chain, creating a verifiable performance history. The system stays inactive until a minimum trade count is reached — ensuring all metrics are based on sufficient data.
-              </p>
             </div>
           </div>
         </div>
@@ -661,11 +540,15 @@ function FAQ() {
   const faqs = [
     {
       q: "What is Quasar?",
-      a: "Quasar is a trustless on-chain AI trading agent. It analyses market conditions, classifies regimes, generates signals using EMA and Fisher Transform, and executes trades governed by smart contract risk controls — with every decision signed and logged on-chain.",
+      a: "Quasar is a trustless on-chain AI trading agent. It analyses market conditions, classifies regimes, and generates signals using EMA for trend-following and Fisher Transform for trend reversals. Trades are governed by smart contract risk controls with every decision signed and logged on-chain.",
     },
     {
       q: "How does Quasar classify market regimes?",
-      a: "Quasar uses a combination of ADX, ATR, and EMA divergence to categorise each market window as trending, volatile, trending-volatile, or ranging. The regime determines which signals are trusted, how positions are sized, and how aggressively the agent trades.",
+      a: "Quasar analyses a window of real-time market data — including cumulative volume delta, buy aggression, realised volatility, open interest, and liquidation pressure — and scores it across three dimensions: trending, volatile, and ranging. The regime determines which signals the agent acts on: EMA for trend-following in trending markets, Fisher Transform for reversals in ranging markets, and a blended approach when both are present.",
+    },
+    {
+      q: "How does the strategy use EMA and Fisher Transform?",
+      a: "EMA signals identify trend-following opportunities — entries aligned with the prevailing direction. Fisher Transform signals identify trend reversal opportunities — entries against an exhausted move. Which signal is trusted depends entirely on the current regime. In ranging markets, reversals dominate. In trending markets, continuation dominates. In volatile markets, both are treated with caution.",
     },
     {
       q: "What is EIP-712 and why does Quasar use it?",
@@ -681,11 +564,7 @@ function FAQ() {
     },
     {
       q: "What is the reputation scoring system?",
-      a: "Before every trade, Quasar analyses its last 100 resolved trades and assigns a reputation score between 0.0 and 1.0. The score combines win rate, decision consistency (penalising incorrect high-confidence calls more heavily), and a streak component that rewards sustained performance. This score directly controls how many positions can be open concurrently and how aggressively positions are sized. Low reputation enforces restricted activity; high reputation unlocks full participation. Every score is recorded on-chain.",
-    },
-    {
-      q: "Is Quasar live on mainnet?",
-      a: "Quasar is currently live on the Sepolia testnet. You can view all contract activity and signed checkpoints on Sepolia Etherscan. Mainnet deployment is planned following an extended testnet validation period.",
+      a: "Before every trade, Quasar analyses its last 100 resolved trades and assigns a reputation score between 0.0 and 1.0. The score combines win rate, decision consistency (penalising incorrect high-confidence calls more heavily), and a streak component that rewards sustained performance. This score directly controls how many positions can be open and how aggressively they are sized. Every score is recorded on-chain.",
     },
     {
       q: "Can I audit the agent's past decisions?",
@@ -735,19 +614,19 @@ function CTA() {
           Every decision.<br />On the record.
         </h2>
         <p className="text-lg text-gray-400 mb-12">
-          Access the live dashboard, inspect checkpoints, and verify every trade on-chain.
+          Access the live dashboard and verify every trade on-chain.
         </p>
         <div className="flex flex-wrap justify-center gap-4">
-          <a href={`${BASE_URL}/auth/google`}
+          <a href="https://sepolia.etherscan.io/address/0x26691C1e42aB79416FEa3AaAed240e7751bF9f6F" target="_blank" rel="noopener noreferrer"
             className="btn-slide btn-slide-dark bg-black text-white px-10 py-4 rounded-full font-bold text-base transition inline-flex items-center gap-2 active:scale-95">
-            <span>View Checkpoints</span>
+            <span>On-Chain Activity</span>
             <ArrowRight size={18} />
           </a>
-          <a href="https://sepolia.etherscan.io/address/0xd6A6952545FF6E6E6681c2d15C59f9EB8F40FdBC" target="_blank" rel="noopener noreferrer"
+          <a href="https://early.surge.xyz/discovery/quasar?ref=rqkM2dQEqKW2puaPZd6ob" target="_blank" rel="noopener noreferrer"
             className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-10 py-4 rounded-full text-base transition">
-            View Contract
+            View Surge Profile
           </a>
-          <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+          <a href="https://github.com/basilgoodluck/quasar" target="_blank" rel="noopener noreferrer"
             className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-10 py-4 rounded-full text-base transition">
             View Code
           </a>
@@ -760,67 +639,104 @@ function CTA() {
 function Footer() {
   const ref = React.useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.2 });
-  const productLinks = landingData.productLinks;
-  const CONTRACTS = landingData.contracts;
+
+  const productLinks = [
+    { text: "Dashboard", href: "/overview" },
+    { text: "Trades", href: "/trades" },
+    { text: "Risk", href: "/risk" },
+  ];
+
+  const contracts = [
+    { label: "RiskRouter", href: "https://sepolia.etherscan.io/address/0x26691C1e42aB79416FEa3AaAed240e7751bF9f6F", address: "0x26691...F9f6F" },
+  ];
+
+  const stack = [
+    "FastAPI · asyncpg · Redis",
+    "Authlib · Docker · VPS",
+    "Kraken CLI · Binance WS",
+    "Web3.py · EIP-712 · ERC-8004",
+    "LSTM · TypeScript · Next.js",
+  ];
+
+  const social = [
+    { label: "GitHub", href: "https://github.com/basilgoodluck/quasar" },
+    { label: "LinkedIn", href: "https://www.linkedin.com/in/goodluck-basil" },
+    { label: "Email", href: "mailto:basilgoodluck22@gmail.com" },
+    { label: "Surge", href: "https://early.surge.xyz/discovery/quasar?ref=rqkM2dQEqKW2puaPZd6ob" },
+  ];
+
   return (
-    <footer id="contracts" ref={ref} className="relative py-24 text-gray-500 overflow-hidden border-t border-gray-100 bg-white">
+    <footer id="contracts" ref={ref} className="relative py-20 text-gray-500 overflow-hidden border-t border-gray-100 bg-white">
       <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8">
-        <div className="flex flex-col lg:flex-row lg:justify-between gap-14 lg:gap-20">
+        <div className="flex flex-col lg:flex-row lg:justify-between gap-12 lg:gap-20">
           <motion.div
             initial={{ opacity: 0, x: -60 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
             transition={{ duration: 0.4 }}
-            className="flex items-center gap-3 flex-shrink-0"
+            className="flex-shrink-0"
           >
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-sm">Q</span>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">Q</span>
+              </div>
+              <span className="text-gray-900 font-bold tracking-wide text-xl">Quasar</span>
             </div>
-            <span className="text-gray-900 font-bold tracking-wide text-xl">Quasar</span>
+            <div className="flex gap-5 mt-2 flex-wrap">
+              {social.map((s) => (
+                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer"
+                  className="text-sm text-gray-400 hover:text-gray-900 transition-colors">
+                  {s.label}
+                </a>
+              ))}
+            </div>
           </motion.div>
+
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="flex flex-col sm:flex-row gap-16 lg:gap-24"
+            className="flex flex-col sm:flex-row gap-12 lg:gap-20"
           >
-            <ul className="space-y-4 text-sm">
-              {productLinks.map((link: any, i: number) => (
-                <motion.li key={link.text}
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={isInView ? { opacity: 1, x: 0 } : {}}
-                  transition={{ duration: 0.35, delay: 0.15 + i * 0.05 }}>
-                  <Link href={link.href} className="hover:text-gray-900 transition-colors text-base">{link.text}</Link>
-                </motion.li>
-              ))}
-            </ul>
-            <div className="text-sm">
+            <div>
+              <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Product</div>
+              <ul className="space-y-3">
+                {productLinks.map((link) => (
+                  <li key={link.text}>
+                    <Link href={link.href} className="text-gray-400 hover:text-gray-900 transition-colors text-sm">{link.text}</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
               <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Contracts · Sepolia</div>
               <div className="space-y-3">
-                {CONTRACTS.map((c: any, i: number) => (
-                  <motion.div key={c.label}
-                    initial={{ opacity: 0, x: -30 }}
-                    animate={isInView ? { opacity: 1, x: 0 } : {}}
-                    transition={{ duration: 0.35, delay: 0.2 + i * 0.05 }}
-                    className="flex justify-between gap-10">
-                    <a href={c.href} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-900 transition-colors text-base">{c.label}</a>
-                    <span className="text-gray-300 text-base">{c.address}</span>
-                  </motion.div>
+                {contracts.map((c) => (
+                  <div key={c.label} className="flex items-center gap-6">
+                    <a href={c.href} target="_blank" rel="noopener noreferrer"
+                      className="text-sm text-gray-400 hover:text-gray-900 transition-colors">{c.label}</a>
+                    <span className="text-sm text-gray-300 font-mono">{c.address}</span>
+                  </div>
                 ))}
               </div>
             </div>
-            <div className="text-sm space-y-3">
+
+            <div>
               <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Stack</div>
-              {["FastAPI · asyncpg · Redis", "Authlib · Docker · AWS EC2", "Kraken API · Binance WS", "Web3.py · EIP-712 · ERC-8004", "PyTorch · LSTM · scikit-learn"].map(s => (
-                <div key={s} className="text-gray-400 text-base">{s}</div>
-              ))}
+              <div className="space-y-2">
+                {stack.map(s => (
+                  <div key={s} className="text-sm text-gray-400">{s}</div>
+                ))}
+              </div>
             </div>
           </motion.div>
         </div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.4, delay: 0.5 }}
-          className="mt-20 pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4"
+          className="mt-16 pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4"
         >
           <p className="text-gray-300 text-sm">© 2025 Quasar. All rights reserved.</p>
           <p className="text-gray-300 text-sm">Trading involves risk. Use at your own discretion.</p>
@@ -842,7 +758,6 @@ export default function Home() {
         <Features />
         <LSTMSection />
         <RiskManagement />
-        <ReputationScore />
         <WhyQuasar />
         <FAQ />
         <CTA />
