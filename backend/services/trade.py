@@ -184,3 +184,11 @@ async def create_event(type: str, db=None, pair: str = None, trade_id: int = Non
         INSERT INTO events (type, trade_id, pair, payload, created_at)
         VALUES ($1, $2, $3, $4, $5)
     """, type, trade_id, pair, payload, int(time.time()))
+
+async def get_symbols(db=None) -> list:
+    rows = await db.fetch("""
+        SELECT symbol, active, intervals, asset_class, created_at
+        FROM symbols
+        ORDER BY symbol ASC
+    """)
+    return [dict(r) for r in rows]
