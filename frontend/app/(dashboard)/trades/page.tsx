@@ -44,6 +44,12 @@ function snapToCandle(tradeTs: number): UTCTimestamp {
   return (Math.floor(tradeTs / INTERVAL_SECONDS) * INTERVAL_SECONDS) as UTCTimestamp
 }
 
+function pfToDisplay(pf: string): string {
+  const base = pf.replace("PF_", "").replace("USD", "")
+  const mapped = base === "XBT" ? "BTC" : base
+  return `${mapped}USDT`
+}
+
 export default function TradesPage() {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -79,7 +85,7 @@ export default function TradesPage() {
   )
 
   const symbolTrades = useMemo(
-    () => filteredTrades.filter(t => t.symbol === selectedSymbol),
+    () => filteredTrades.filter(t => pfToDisplay(t.symbol) === selectedSymbol),
     [filteredTrades, selectedSymbol]
   )
 
@@ -91,18 +97,20 @@ export default function TradesPage() {
 
   const buildMarkers = useCallback((tradeList: Trade[]): SeriesMarker<Time>[] => {
     const candleTimes = candleTimesRef.current
+    const firstCandle = candleTimes.size > 0 ? Math.min(...candleTimes) : 0
     return tradeList
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       .map(t => {
         const tradeTs = Math.floor(new Date(t.timestamp).getTime() / 1000)
         const snapped = snapToCandle(tradeTs)
-        if (candleTimes.size > 0 && !candleTimes.has(snapped)) return null
+        // drop trades older than the loaded candle window
+        if (candleTimes.size > 0 && snapped < firstCandle) return null
         return {
           time: snapped,
           position: t.side === "BUY" ? "belowBar" : "aboveBar",
           color: decisionColor(t.decision),
           shape: t.side === "BUY" ? "arrowUp" : "arrowDown",
-          text: `${t.side} ${t.pnl >= 0 ? "+" : ""}${fmt(t.pnl, 0)}`,
+          text: `${t.side} ${t.exit_price ? (t.pnl >= 0 ? "+" : "") + fmt(t.pnl, 0) : "open"}`,
           id: t.id,
         } as SeriesMarker<Time>
       })
