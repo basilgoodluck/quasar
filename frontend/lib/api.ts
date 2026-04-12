@@ -25,12 +25,10 @@ async function request<T>(
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
-
   if (!res.ok) {
     const error = await res.text().catch(() => res.statusText)
     throw new Error(`${method} ${endpoint} failed [${res.status}]: ${error}`)
   }
-
   return res.json() as Promise<T>
 }
 
@@ -40,7 +38,7 @@ export const api = {
 
   dashboard: {
     overview: () => api.get<any>("/api/dashboard/overview"),
-    trades:   () => api.get<any[]>("/api/dashboard/trades"),
+    trades: () => api.get<any[]>("/api/dashboard/trades"),
   },
 
   binance: {
@@ -51,6 +49,6 @@ export const api = {
   },
 
   trade: {
-    getSymbols: () => api.get<string[]>("/api/trade/symbols"),
+    getSymbols: () => api.get<{ symbol: string; active: boolean; intervals: string[]; asset_class: string; created_at: string }[]>("/api/trade/symbols"),
   },
 }

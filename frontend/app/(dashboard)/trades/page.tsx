@@ -65,7 +65,8 @@ export default function TradesPage() {
   // Fetch symbols on mount
   useEffect(() => {
     api.trade.getSymbols()
-      .then((names: string[]) => {
+      .then((data: { symbol: string; active: boolean; intervals: string[]; asset_class: string; created_at: string }[]) => {
+        const names = data.map(s => s.symbol)
         setSymbols(names)
         if (names.length > 0) setSelectedSymbol(names[0])
       })
