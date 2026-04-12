@@ -19,3 +19,4 @@ async def dashboard_trades(status: str = None, pair: str = None, limit: int = 10
 @router.get("/trade/symbols")
 async def trade_symbols(db=Depends(get_db)):
     return await get_symbols(db=db)
+

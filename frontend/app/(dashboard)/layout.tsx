@@ -7,9 +7,7 @@ import { BASE_URL } from "@/lib/api"
 
 const NAV = [
   { href: "/overview", label: "overview", icon: "▦" },
-  { href: "/trades", label: "trades", icon: "⇅" },
-  { href: "/checkpoints", label: "checkpoints", icon: "◎" },
-  { href: "/activity", label: "activity", icon: "≋" },
+  { href: "/trades", label: "trades", icon: "⇅" }
 ]
 
 function Sidebar({ pathname }: { pathname: string }) {

@@ -41,9 +41,7 @@
     { "label": "Validation", "address": "0x92bF63...87F1", "href": "https://sepolia.etherscan.io/address/0x92bF63E5C7Ac6980f237a7164Ab413BE226187F1" }
   ],
   "productLinks": [
-    { "text": "Dashboard", "href": "/dashboard" },
-    { "text": "Checkpoints", "href": "/checkpoints" },
-    { "text": "Trades", "href": "/trades" },
-    { "text": "Risk", "href": "/risk" }
+    { "text": "Overview", "href": "/overview" },
+    { "text": "Trades", "href": "/trades" }
   ]
 }

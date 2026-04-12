@@ -36,7 +36,7 @@ function decisionBg(d: string) {
   return "#451a03"
 }
 
-function fmt(n: number, decimals = 2) {
+function fmt(n: number, decimals = 4) {
   return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 }
 
@@ -380,7 +380,7 @@ export default function TradesPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", fontFamily: "monospace" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
-                    {["time", "symbol", "side", "entry", "exit", "pnl", "conf", "decision"].map(h => (
+                    {["time", "symbol", "side", "entry", "exit", "pnl", "invested", "conf", "decision"].map(h => (
                       <th key={h} style={{ padding: "12px 10px", textAlign: "left", color: "#6b7280", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
@@ -394,10 +394,11 @@ export default function TradesPage() {
                       <td style={{ padding: "12px 10px", color: "#374151" }}>{t.symbol}</td>
                       <td style={{ padding: "12px 10px", color: t.side === "BUY" ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{t.side}</td>
                       <td style={{ padding: "12px 10px", color: "#6b7280" }}>{fmt(t.entry_price)}</td>
-                      <td style={{ padding: "12px 10px", color: "#6b7280" }}>{t.exit_price != null ? fmt(t.exit_price) : "0.0000"}</td>
+                      <td style={{ padding: "12px 10px", color: "#6b7280" }}>{t.exit_price != null ? fmt(t.exit_price) : "—"}</td>
                       <td style={{ padding: "12px 10px", color: t.pnl >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600 }}>
-                        {t.pnl >= 0 ? "+" : ""}{fmt(t.pnl)}
+                        {t.pnl >= 0 ? "+" : ""}{fmt(t.pnl, 2)}
                       </td>
+                      <td style={{ padding: "12px 10px", color: "#6b7280" }}>${fmt(t.volume, 2)}</td>
                       <td style={{ padding: "12px 10px", color: "#6b7280" }}>{(t.confidence * 100).toFixed(0)}%</td>
                       <td style={{ padding: "12px 10px" }}>
                         <span style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "9999px", background: decisionBg(t.decision), color: decisionColor(t.decision) }}>
