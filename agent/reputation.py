@@ -94,7 +94,6 @@ async def get_reputation_score() -> float:
     # Run in background — never block score return on AI availability.
     # The insight is logged and cached for the strategy to optionally read.
     try:
-        from agent.ai_advisor import ai_reputation_insight
         trade_rows = [dict(r) for r in rows]
         asyncio.create_task(
             _run_and_cache_insight(score, win_rate, consistency, streak, trade_rows)

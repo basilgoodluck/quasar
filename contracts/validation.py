@@ -27,7 +27,7 @@ def _send_attestation_tx(func_call, pair: str, tx_type: str):
         tx = func_call.build_transaction({
             "from":     _account.address,
             "nonce":    _w3.eth.get_transaction_count(_account.address),
-            "gas":      500000,                    # explicit gas limit
+            "gas":      500000,
             "gasPrice": _w3.eth.gas_price,
         })
 
@@ -42,27 +42,25 @@ def _send_attestation_tx(func_call, pair: str, tx_type: str):
 
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"[{pair}] {tx_type} failed: {error_msg}")
+        print(f"[{pair}] {tx_type} failed: {error_msg}")
 
         # Try to extract revert reason
         if "execution reverted" in error_msg.lower():
             try:
-                # For newer web3.py
                 if hasattr(e, 'args') and len(e.args) > 1:
                     revert_data = e.args[1]
-                    logger.error(f"[{pair}] Revert data: {revert_data}")
-                
-                # Common patterns for revert reason
+                    print(f"[{pair}] Revert data: {revert_data}")
+
                 if "0x" in error_msg:
-                    logger.error(f"[{pair}] Raw revert: {error_msg.split('0x')[-1]}")
-            except:
+                    print(f"[{pair}] Raw revert: {error_msg.split('0x')[-1]}")
+            except Exception:
                 pass
 
         # Static call to get better error
         try:
             func_call.call({"from": _account.address})
         except Exception as static_e:
-            logger.error(f"[{pair}] Static call failed with: {static_e}")
+            print(f"[{pair}] Static call failed with: {static_e}")
 
         raise
 
@@ -76,7 +74,7 @@ def post_checkpoint(
     confidence: float,
     intent_hash: str,
 ) -> dict:
-    registry, account = _get_registry()   # account not used directly now
+    registry, account = _get_registry()
 
     reasoning_hash = _w3.keccak(text=reasoning)
     encoded = _w3.codec.encode(
@@ -95,7 +93,6 @@ def post_checkpoint(
     )
     checkpoint_hash = _w3.keccak(encoded)
 
-    # Use helper
     tx_info = _send_attestation_tx(
         registry.functions.postEIP712Attestation(
             AGENT_ID,
@@ -139,7 +136,7 @@ def post_skip_checkpoint(
         registry.functions.postEIP712Attestation(
             AGENT_ID,
             checkpoint_hash,
-            int(confidence * 100),   # note: using *100 here
+            int(confidence * 100),
             reason
         ),
         pair=pair,

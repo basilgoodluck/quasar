@@ -65,13 +65,12 @@ export default function TradesPage() {
   // Fetch symbols on mount
   useEffect(() => {
     api.trade.getSymbols()
-      .then((data: string[]) => {
-        setSymbols(data)
-        if (data.length > 0) setSelectedSymbol(data[0])
+      .then((data: { symbol: string }[]) => {
+        const names = data.map(s => s.symbol)
+        setSymbols(names)
+        if (names.length > 0) setSelectedSymbol(names[0])
       })
-      .catch(() => {
-        // fallback to empty; user can still see chart once symbol is set
-      })
+      .catch(() => {})
   }, [])
 
   const filteredTrades = useMemo(
@@ -169,11 +168,10 @@ export default function TradesPage() {
     return () => ws.close()
   }, [selectedSymbol])
 
-  // Chart init — recreate fully when theme or symbol changes, passing series refs into fetchHistoricalData
+  // Chart init — recreate fully when theme or symbol changes
   useEffect(() => {
     if (!chartContainerRef.current || !selectedSymbol) return
 
-    // Fully tear down any existing chart first
     if (chartRef.current) {
       chartRef.current.remove()
       chartRef.current = null
@@ -219,7 +217,6 @@ export default function TradesPage() {
     lineSeriesRef.current = lineSeries
     markersPluginRef.current = markersPlugin
 
-    // Pass series and chart directly — avoids stale ref race
     fetchHistoricalData(selectedSymbol, candleSeries, lineSeries, chart)
 
     const ro = new ResizeObserver(entries => {
@@ -267,19 +264,22 @@ export default function TradesPage() {
       {/* Chart */}
       <div style={{ background: "#ffffff", border: "1px solid #e5e5e5", borderRadius: "12px", padding: "20px", position: "relative" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {/* Symbol dropdown */}
+          <select
+            value={selectedSymbol}
+            onChange={e => setSelectedSymbol(e.target.value)}
+            style={{
+              fontSize: "13px", padding: "8px 14px", borderRadius: "8px",
+              border: "1px solid #d1d5db", background: "#ffffff",
+              color: "#374151", cursor: "pointer", fontFamily: "monospace",
+              fontWeight: 600, minWidth: "140px",
+            }}
+          >
             {symbols.map(s => (
-              <button key={s} onClick={() => setSelectedSymbol(s)} style={{
-                fontSize: "12px", padding: "6px 14px", borderRadius: "8px", border: "1px solid", cursor: "pointer",
-                borderColor: selectedSymbol === s ? "#2563eb" : "#d1d5db",
-                background: selectedSymbol === s ? "#eff6ff" : "#ffffff",
-                color: selectedSymbol === s ? "#1e40af" : "#6b7280",
-                fontWeight: selectedSymbol === s ? 600 : 400,
-              }}>
-                {s}
-              </button>
+              <option key={s} value={s}>{s}</option>
             ))}
-          </div>
+          </select>
+
           <button
             onClick={() => setChartTheme(chartTheme === "light" ? "dark" : "light")}
             style={{ fontSize: "12px", padding: "6px 14px", borderRadius: "8px", border: "1px solid #d1d5db", background: chartTheme === "dark" ? "#111111" : "#ffffff", color: chartTheme === "dark" ? "#e4e4e7" : "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
@@ -287,7 +287,9 @@ export default function TradesPage() {
             {chartTheme === "light" ? "🌙 Dark Chart" : "☀️ Light Chart"}
           </button>
         </div>
+
         <div ref={chartContainerRef} style={{ width: "100%", height: "420px", borderRadius: "8px", overflow: "hidden" }} />
+
         <div style={{ display: "flex", gap: "20px", marginTop: "16px", flexWrap: "wrap" }}>
           {[{ label: "approved", color: "#22c55e" }, { label: "rejected", color: "#ef4444" }, { label: "skipped", color: "#f59e0b" }].map(item => (
             <div key={item.label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280" }}>
@@ -344,7 +346,6 @@ export default function TradesPage() {
 
       {/* Trades Table */}
       <div style={{ background: "#ffffff", border: "1px solid #e5e5e5", borderRadius: "12px", padding: "20px" }}>
-        {/* Table header row: title + filter + count */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#6b7280", letterSpacing: ".08em", textTransform: "uppercase" }}>
             RECENT TRADES <span style={{ color: "#9ca3af" }}>({filteredTrades.length})</span>

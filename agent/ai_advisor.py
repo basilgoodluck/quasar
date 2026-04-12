@@ -1,5 +1,4 @@
 import json
-import asyncio
 from openai import AsyncOpenAI
 from config import OPENAI_API_KEY
 from logger import get_logger
