@@ -1,6 +1,23 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, X, ArrowRight, Check, Shield, Zap, Eye, TrendingUp, Activity, ChevronRight } from 'lucide-react';
+import { 
+  Menu, 
+  X, 
+  ArrowRight, 
+  Check, 
+  Shield, 
+  Zap, 
+  Eye, 
+  TrendingUp, 
+  Activity, 
+  ChevronRight 
+} from 'lucide-react';
+import { 
+  FaGithub, 
+  FaLinkedin, 
+  FaEnvelope 
+} from 'react-icons/fa';
+import { FiExternalLink } from 'react-icons/fi';
 import { motion, useInView } from 'framer-motion';
 import Link from 'next/link';
 import Head from 'next/head';
@@ -45,12 +62,13 @@ function Header() {
     { href: "#how", label: "How It Works" },
     { href: "#features", label: "Features" },
     { href: "#faq", label: "FAQ" },
-    { href: "#contracts", label: "Contracts" },
   ];
+
   useEffect(() => {
     document.body.style.overflow = isMenuOpen ? 'hidden' : 'unset';
     return () => { document.body.style.overflow = 'unset'; };
   }, [isMenuOpen]);
+
   return (
     <>
       <motion.nav
@@ -58,9 +76,9 @@ function Header() {
         animate={{ y: 0 }}
         transition={{ duration: 0.18, ease: "easeOut" }}
         style={{ height: NAV_HEIGHT }}
-        className="fixed top-0 left-0 right-0 z-50 px-6 md:px-12 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center"
+        className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 md:px-12 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center"
       >
-        <div className="w-full mx-auto flex items-center justify-between">
+        <div className="w-full max-w-7xl mx-auto flex items-center justify-between">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -72,13 +90,9 @@ function Header() {
             </div>
             <span className="text-gray-900 font-bold tracking-wide text-xl">Quasar</span>
           </motion.div>
-          <div className="hidden md:flex items-center space-x-16">
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08, duration: 0.25 }}
-              className="flex items-center space-x-10"
-            >
+
+          <div className="hidden md:flex items-center space-x-8 lg:space-x-16">
+            <div className="flex items-center space-x-8 lg:space-x-10">
               {navLinks.map((link, i) => (
                 <motion.a
                   key={link.label}
@@ -92,7 +106,8 @@ function Header() {
                   {link.label}
                 </motion.a>
               ))}
-            </motion.div>
+            </div>
+
             <motion.a
               href="/overview"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -100,16 +115,18 @@ function Header() {
               transition={{ delay: 0.18, duration: 0.25 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="btn-slide btn-slide-dark bg-black text-white px-7 py-3 rounded-full font-bold text-base transition"
+              className="btn-slide btn-slide-dark bg-black text-white px-6 py-3 rounded-full font-bold text-base transition"
             >
               Launch Agent
             </motion.a>
           </div>
+
           <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="md:hidden text-gray-900 z-50 relative">
             {isMenuOpen ? <X size={26} /> : <Menu size={26} />}
           </button>
         </div>
       </motion.nav>
+
       <div className={`fixed inset-0 bg-white z-40 md:hidden transition-all duration-300 ${isMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
         <div className="h-full flex flex-col items-center justify-center space-y-10">
           {navLinks.map((link, i) => (
@@ -167,8 +184,8 @@ function Hero() {
   return (
     <section
       ref={sectionRef}
-      className="relative px-4 sm:px-6 md:px-12 flex flex-col justify-center overflow-hidden"
-      style={{ minHeight: `calc(100vh - ${NAV_HEIGHT}px)`, marginTop: NAV_HEIGHT, background: '#0a0a0f' }}
+      className="relative px-4 sm:px-6 md:px-12 flex flex-col justify-center overflow-hidden min-h-[calc(100vh-74px)]"
+      style={{ marginTop: NAV_HEIGHT, background: '#0a0a0f' }}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div style={{
@@ -206,12 +223,12 @@ function Hero() {
 
       <div className="pointer-events-none absolute inset-0" style={{ background: 'rgba(10,10,15,0.75)' }} />
 
-      <div className="max-w-4xl mx-auto relative z-10 w-full">
+      <div className="max-w-4xl mx-auto relative z-10 w-full px-4">
         <div className="text-center">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-4">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
             <span className="text-blue-600">On-Chain</span> <span className="text-white">AI Trading</span>
           </h1>
-          <h2 className="text-4xl font-black mb-8 text-white relative inline-block h-[1.2em] overflow-hidden mx-auto">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-black mb-8 text-white relative inline-block h-[1.2em] overflow-hidden mx-auto">
             <span className="invisible">{longestWord}</span>
             <span key={currentIndex} className="absolute inset-0 flex items-center justify-center animate-slideUp">
               <span className="relative inline-block">
@@ -220,7 +237,7 @@ function Hero() {
               </span>
             </span>
           </h2>
-          <p className="text-lg text-gray-400 max-w-2xl mb-10 leading-relaxed mx-auto">
+          <p className="text-base sm:text-lg text-gray-400 max-w-2xl mb-10 leading-relaxed mx-auto">
             A trustless trading agent that classifies market regimes, learns from its own decisions via LSTM, and enforces every trade through EIP-712 signed smart contract risk controls. Every decision is verifiable. Nothing is a black box.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
@@ -233,10 +250,10 @@ function Hero() {
               On-Chain Activity
             </a>
           </div>
-          <div className="flex gap-10 mt-14 pt-10 border-t border-gray-800 justify-center">
+          <div className="flex flex-wrap gap-8 mt-14 pt-10 border-t border-gray-800 justify-center">
             {landingData.heroStats.map((s: any) => (
-              <div key={s.label}>
-                <div className="text-xl text-blue-400 font-bold">{s.value}</div>
+              <div key={s.label} className="text-center">
+                <div className="text-2xl text-blue-400 font-bold">{s.value}</div>
                 <div className="text-sm text-gray-500 mt-1">{s.label}</div>
               </div>
             ))}
@@ -262,7 +279,7 @@ function Hero() {
 function HowItWorks() {
   const steps = landingData.howItWorksSteps;
   return (
-    <section id="how" className="relative px-4 sm:px-6 md:px-12 py-24 bg-white">
+    <section id="how" className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
       <div className="max-w-7xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">How It Works</h2>
         <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
@@ -270,7 +287,7 @@ function HowItWorks() {
         </p>
         <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-start">
           <div className="relative flex justify-center order-2 md:order-1">
-            <div className="w-full bg-gray-50 rounded-2xl border border-gray-200 p-6 text-sm font-mono">
+            <div className="w-full max-w-md bg-gray-50 rounded-2xl border border-gray-200 p-6 text-sm font-mono">
               {["TradeDecision", "TradeIntent", "EIP-712 Signature", "RiskRouter Validation", "Execution", "Checkpoint"].map((s, i, arr) => (
                 <div key={s}>
                   <div className="flex items-center gap-3 py-3">
@@ -316,11 +333,6 @@ function MarketRegimes() {
       signals: ["Realised vol spike", "CVD flipping", "Liquidation imbalance low"],
     },
     {
-      name: "Trending Volatile",
-      description: "Directional momentum exists but with elevated noise. EMA continuation signals are weighted lower. Fisher Transform reversals are monitored closely as early exit triggers. A hybrid risk model applies.",
-      signals: ["CVD slope present", "Realised vol elevated", "Hybrid risk model active"],
-    },
-    {
       name: "Ranging",
       description: "Sideways price action with weak order flow. EMA trend signals are ignored entirely. Fisher Transform reversal signals take priority. Trade frequency is significantly reduced.",
       signals: ["CVD slope near zero", "Low return slope", "Fisher Transform prioritised"],
@@ -328,20 +340,20 @@ function MarketRegimes() {
   ];
 
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-24 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-gray-50">
+      <div className="max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Market Regime Classification</h2>
-        <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
-          Before evaluating any signal, Quasar classifies the current market into one of four regimes. The regime determines whether EMA trend-following or Fisher Transform reversal signals are trusted — and how aggressively the agent acts.
+        <p className="text-center text-gray-400 max-w-2xl mx-auto mb-16 text-base leading-relaxed">
+          Before evaluating any signal, Quasar classifies the current market into one of three regimes. The regime determines whether EMA trend-following or Fisher Transform reversal signals are trusted — and how aggressively the agent acts.
         </p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
           {regimes.map((r) => (
-            <div key={r.name} className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col gap-4">
-              <h3 className="font-bold text-gray-900 text-base">{r.name}</h3>
+            <div key={r.name} className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col gap-4 w-full max-w-sm">
+              <h3 className="font-bold text-gray-900 text-lg">{r.name}</h3>
               <p className="text-sm text-gray-500 leading-relaxed flex-1">{r.description}</p>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 mt-auto">
                 {r.signals.map(sig => (
-                  <span key={sig} className="text-xs font-medium px-2 py-1 rounded-md bg-gray-100 text-gray-600">{sig}</span>
+                  <span key={sig} className="text-xs font-medium px-3 py-1.5 rounded-md bg-gray-100 text-gray-600 inline-block">{sig}</span>
                 ))}
               </div>
             </div>
@@ -355,8 +367,8 @@ function MarketRegimes() {
 function Features() {
   const features = landingData.features;
   return (
-    <section id="features" className="relative px-4 sm:px-6 md:px-12 py-24 bg-white">
-      <div className="max-w-6xl mx-auto relative z-10 space-y-10">
+    <section id="features" className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+      <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl text-center font-bold mb-4 text-gray-900">
           ...your trades are on the record
         </h2>
@@ -417,13 +429,13 @@ function Features() {
 
 function RiskManagement() {
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-24 bg-gray-50">
+    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Risk Management</h2>
         <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
           Quasar enforces strict risk controls at every layer — from position sizing to on-chain smart contract gates — so capital preservation is never optional.
         </p>
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="grid md:grid-cols-3 gap-6 md:gap-8">
           <div className="bg-white rounded-2xl border border-gray-100 p-8">
             <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center mb-5">
               <TrendingUp size={20} className="text-white" />
@@ -459,9 +471,9 @@ function RiskManagement() {
 
 function LSTMSection() {
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-24 bg-white">
+    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-16 items-center">
+        <div className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
             <h2 className="text-3xl font-bold text-gray-900 mb-5">An agent that learns from its own history</h2>
             <p className="text-gray-500 text-base leading-relaxed mb-6">
@@ -509,8 +521,8 @@ function LSTMSection() {
 function WhyQuasar() {
   const reasons = landingData.whyQuasarReasons;
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-24 bg-white">
-      <div className="max-w-2xl mx-auto relative z-10">
+    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+      <div className="max-w-2xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Why Quasar?</h2>
         <p className="text-center text-gray-400 max-w-xl mx-auto mb-16 text-base leading-relaxed">
           Most trading bots are black boxes. Quasar is built from the ground up to be auditable, accountable, and self-correcting.
@@ -575,7 +587,7 @@ function FAQ() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="relative px-4 sm:px-6 md:px-12 py-24 bg-gray-50">
+    <section id="faq" className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-gray-50">
       <div className="max-w-3xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-4 text-gray-900">Frequently Asked Questions</h2>
         <p className="text-center text-gray-400 max-w-xl mx-auto mb-14 text-base leading-relaxed">
@@ -586,7 +598,7 @@ function FAQ() {
             <div key={i} className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
               <button
                 onClick={() => setOpen(open === i ? null : i)}
-                className="w-full flex items-center justify-between px-6 py-5 text-left"
+                className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-gray-50 transition"
               >
                 <span className="font-semibold text-gray-900 text-base">{faq.q}</span>
                 <span className={`ml-4 flex-shrink-0 transition-transform duration-200 ${open === i ? 'rotate-90' : ''}`}>
@@ -594,7 +606,7 @@ function FAQ() {
                 </span>
               </button>
               {open === i && (
-                <div className="px-6 pb-5">
+                <div className="px-6 pb-6">
                   <p className="text-gray-500 text-sm leading-relaxed">{faq.a}</p>
                 </div>
               )}
@@ -608,26 +620,26 @@ function FAQ() {
 
 function CTA() {
   return (
-    <section className="relative px-4 sm:px-6 md:px-12 py-24 bg-white">
-      <div className="max-w-4xl mx-auto text-center relative z-10">
+    <section className="relative px-4 sm:px-6 md:px-12 py-20 md:py-24 bg-white">
+      <div className="max-w-4xl mx-auto text-center">
         <h2 className="text-4xl font-bold text-gray-900 mb-6">
           Every decision.<br />On the record.
         </h2>
-        <p className="text-lg text-gray-400 mb-12">
+        <p className="text-lg text-gray-400 mb-12 max-w-md mx-auto">
           Access the live dashboard and verify every trade on-chain.
         </p>
         <div className="flex flex-wrap justify-center gap-4">
           <a href="https://sepolia.etherscan.io/address/0x26691C1e42aB79416FEa3AaAed240e7751bF9f6F" target="_blank" rel="noopener noreferrer"
-            className="btn-slide btn-slide-dark bg-black text-white px-10 py-4 rounded-full font-bold text-base transition inline-flex items-center gap-2 active:scale-95">
+            className="btn-slide btn-slide-dark bg-black text-white px-8 py-4 rounded-full font-bold text-base transition inline-flex items-center gap-2 active:scale-95">
             <span>On-Chain Activity</span>
             <ArrowRight size={18} />
           </a>
           <a href="https://early.surge.xyz/discovery/quasar?ref=rqkM2dQEqKW2puaPZd6ob" target="_blank" rel="noopener noreferrer"
-            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-10 py-4 rounded-full text-base transition">
+            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-8 py-4 rounded-full text-base transition">
             View Surge Profile
           </a>
           <a href="https://github.com/basilgoodluck/quasar" target="_blank" rel="noopener noreferrer"
-            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-10 py-4 rounded-full text-base transition">
+            className="btn-slide btn-slide-border border border-gray-200 text-gray-600 px-8 py-4 rounded-full text-base transition">
             View Code
           </a>
         </div>
@@ -646,10 +658,6 @@ function Footer() {
     { text: "Risk", href: "/risk" },
   ];
 
-  const contracts = [
-    { label: "RiskRouter", href: "https://sepolia.etherscan.io/address/0x26691C1e42aB79416FEa3AaAed240e7751bF9f6F", address: "0x26691...F9f6F" },
-  ];
-
   const stack = [
     "FastAPI · asyncpg · Redis",
     "Authlib · Docker · VPS",
@@ -659,33 +667,39 @@ function Footer() {
   ];
 
   const social = [
-    { label: "GitHub", href: "https://github.com/basilgoodluck/quasar" },
-    { label: "LinkedIn", href: "https://www.linkedin.com/in/goodluck-basil" },
-    { label: "Email", href: "mailto:basilgoodluck22@gmail.com" },
-    { label: "Surge", href: "https://early.surge.xyz/discovery/quasar?ref=rqkM2dQEqKW2puaPZd6ob" },
+    { Icon: FaGithub, label: "GitHub", href: "https://github.com/basilgoodluck/quasar" },
+    { Icon: FaLinkedin, label: "LinkedIn", href: "https://www.linkedin.com/in/goodluck-basil" },
+    { Icon: FaEnvelope, label: "Email", href: "mailto:basilgoodluck22@gmail.com" },
+    { Icon: FiExternalLink, label: "Surge", href: "https://early.surge.xyz/discovery/quasar?ref=rqkM2dQEqKW2puaPZd6ob" },
   ];
 
   return (
-    <footer id="contracts" ref={ref} className="relative py-20 text-gray-500 overflow-hidden border-t border-gray-100 bg-white">
-      <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8">
-        <div className="flex flex-col lg:flex-row lg:justify-between gap-12 lg:gap-20">
+    <footer ref={ref} className="relative py-16 md:py-20 text-gray-500 border-t border-gray-100 bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col lg:flex-row gap-12 lg:gap-20">
           <motion.div
             initial={{ opacity: 0, x: -60 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
             transition={{ duration: 0.4 }}
             className="flex-shrink-0"
           >
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-sm">Q</span>
               </div>
-              <span className="text-gray-900 font-bold tracking-wide text-xl">Quasar</span>
+              <span className="text-gray-900 font-bold tracking-wide text-2xl">Quasar</span>
             </div>
-            <div className="flex gap-5 mt-2 flex-wrap">
-              {social.map((s) => (
-                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer"
-                  className="text-sm text-gray-400 hover:text-gray-900 transition-colors">
-                  {s.label}
+            <div className="flex gap-6">
+              {social.map((s, index) => (
+                <a 
+                  key={index} 
+                  href={s.href} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-gray-900 transition-colors"
+                  aria-label={s.label}
+                >
+                  <s.Icon size={24} />
                 </a>
               ))}
             </div>
@@ -695,37 +709,26 @@ function Footer() {
             initial={{ opacity: 0, y: 50 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="flex flex-col sm:flex-row gap-12 lg:gap-20"
+            className="flex flex-col sm:flex-row gap-10 lg:gap-16 flex-1"
           >
             <div>
               <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Product</div>
               <ul className="space-y-3">
                 {productLinks.map((link) => (
                   <li key={link.text}>
-                    <Link href={link.href} className="text-gray-400 hover:text-gray-900 transition-colors text-sm">{link.text}</Link>
+                    <Link href={link.href} className="text-gray-400 hover:text-gray-900 transition-colors text-sm">
+                      {link.text}
+                    </Link>
                   </li>
                 ))}
               </ul>
             </div>
 
             <div>
-              <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Contracts · Sepolia</div>
-              <div className="space-y-3">
-                {contracts.map((c) => (
-                  <div key={c.label} className="flex items-center gap-6">
-                    <a href={c.href} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-gray-400 hover:text-gray-900 transition-colors">{c.label}</a>
-                    <span className="text-sm text-gray-300 font-mono">{c.address}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
               <div className="text-blue-600 uppercase tracking-widest text-xs font-bold mb-5">Stack</div>
-              <div className="space-y-2">
-                {stack.map(s => (
-                  <div key={s} className="text-sm text-gray-400">{s}</div>
+              <div className="space-y-2 text-sm text-gray-400">
+                {stack.map((s, i) => (
+                  <div key={i}>{s}</div>
                 ))}
               </div>
             </div>
@@ -736,10 +739,10 @@ function Footer() {
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.4, delay: 0.5 }}
-          className="mt-16 pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4"
+          className="mt-16 pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400"
         >
-          <p className="text-gray-300 text-sm">© 2025 Quasar. All rights reserved.</p>
-          <p className="text-gray-300 text-sm">Trading involves risk. Use at your own discretion.</p>
+          <p>© 2026 Quasar. All rights reserved.</p>
+          <p>Trading involves risk. Use at your own discretion.</p>
         </motion.div>
       </div>
     </footer>

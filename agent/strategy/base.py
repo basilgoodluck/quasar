@@ -87,15 +87,16 @@ async def _ensure_paper_init():
 
 class BaseStrategy(ABC):
 
-    def skip(self, symbol: str, reason: str, confidence: float = 0.0) -> dict:
+    def skip(self, symbol: str, reason: str, confidence: float = 0.0, post_on_chain: bool = False) -> dict:
         return {
-            "symbol":      symbol,
-            "action":      "SKIP",
-            "leverage":    0.0,
-            "risk_pct":    0.0,
-            "rr_ratio":    0.0,
-            "explanation": reason,
-            "ready":       False,
+            "symbol":        symbol,
+            "action":        "SKIP",
+            "leverage":      0.0,
+            "risk_pct":      0.0,
+            "rr_ratio":      0.0,
+            "explanation":   reason,
+            "post_on_chain": post_on_chain,
+            "ready":         False,
         }
 
     @abstractmethod
